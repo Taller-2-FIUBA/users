@@ -1,0 +1,3 @@
+fastapi[all]
+prometheus-client
+environ-config

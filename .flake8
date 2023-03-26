@@ -1,0 +1,12 @@
+[flake8]
+
+# D10* -> missing docstrings
+# W503 -> line break before binary operator
+ignore = D10, W503
+exclude =
+    .git,
+    .github,
+    doc,
+    build,
+    dist,
+    __pycache__,

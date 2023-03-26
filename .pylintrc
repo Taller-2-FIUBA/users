@@ -1,0 +1,12 @@
+# https://pylint.readthedocs.io/en/latest/user_guide/configuration/all-options.html
+[BASIC]
+
+good-names=id, n
+
+[SIMILARITIES]
+
+ignore-imports=yes
+
+[MESSAGES CONTROL]
+
+disable=too-few-public-methods

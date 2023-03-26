@@ -1,0 +1,10 @@
+tox
+pytest
+pytest-cov
+pylint
+flake8
+flake8-docstrings
+flake8-print
+mypy
+black
+pre-commit
