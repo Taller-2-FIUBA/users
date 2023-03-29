@@ -1,12 +1,15 @@
 FROM python:3.11
 
-WORKDIR /user/src/users
+RUN mkdir -p /home/app
 
-COPY . .
-RUN pip install pip --upgrade
-RUN pip install --no-cache-dir -r requirements.txt
-RUN pip install -e .
+COPY ./users /home/app
+COPY . /home/
 
-WORKDIR /user/src/users/users
+WORKDIR /home/app
 
-ENTRYPOINT [ "uvicorn", "main:app", "--port=80", "--reload" ]
+RUN pip install --no-cache-dir --upgrade -r /home/requirements.txt
+
+EXPOSE 8000
+
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+

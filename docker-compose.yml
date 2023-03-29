@@ -1,0 +1,26 @@
+version: "3.9"
+services:
+  user_db:
+    image: postgres
+    ports:
+      - "27017:5432"
+    environment:
+      - PGUSER=postgres
+      - POSTGRES_PASSWORD=postgres
+    healthcheck:
+      test: [ "CMD", "pg_isready"]
+      timeout: 1s
+      retries: 1
+    volumes:
+      - postgres:/var/lib/postgresql/data
+  user_login:
+    build: .
+    depends_on:
+      user_db:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    links:
+      - user_db
+volumes:
+  postgres:
