@@ -1,13 +1,12 @@
 FROM python:3.11
 
-RUN mkdir -p /home/app
+COPY . .
 
-COPY ./users /home/app
-COPY . /home/
+RUN pip install pip --upgrade
+RUN pip install --no-cache-dir -r requirements.txt
+#RUN pip install --verbose -e .
 
-WORKDIR /home/app
-
-RUN pip install --no-cache-dir --upgrade -r /home/requirements.txt
+WORKDIR ./users
 
 EXPOSE 8000
 

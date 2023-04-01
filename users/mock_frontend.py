@@ -28,58 +28,62 @@ app.add_middleware(
    allow_headers=allow_all
 )
 
-# signup endpoint
-# creates user from email and password, returns user id
+
 @app.post("/signup", include_in_schema=False)
 async def signup(request: Request):
-   req = await request.json()
-   email = req['email']
-   password = req['password']
-   if email is None or password is None:
-       raise HTTPException(detail={'message': 'Error! Missing Email or Password'}, status_code=400)
-   try:
-       user = auth.create_user(
-           email=email,
-           password=password
-       )
-       return JSONResponse(content={'id': user.uid}, status_code=200)
-   except:
-       raise HTTPException(detail={'message': 'Error Creating User'}, status_code=400)
+    """Creates user in Firebase from email and password, returns user_id"""
+    req = await request.json()
+    email = req['email']
+    password = req['password']
+    if email is None or password is None:
+        raise HTTPException(detail={'message': 'Error! Missing Email or Password'}, status_code=400)
+    try:
+        user = auth.create_user(
+            email=email,
+            password=password
+        )
+        return JSONResponse(content={'id': user.uid}, status_code=200)
+    except:
+        raise HTTPException(detail={'message': 'Error Creating User'}, status_code=400)
 
-# login endpoint
-# returns jwt for valid user (correct email and password)
+
 @app.post("/login", include_in_schema=False)
 async def login(request: Request):
-   req_json = await request.json()
-   email = req_json['email']
-   password = req_json['password']
-   try:
-       user = pb.auth().sign_in_with_email_and_password(email, password)
-       jwt = user['idToken']
-       return JSONResponse(content={'token': jwt}, status_code=200)
-   except:
-       raise HTTPException(detail={'message': 'There was an error logging in'}, status_code=400)
+    """Logs in to Firebase with email, password. Returns token if successful"""
+    req_json = await request.json()
+    email = req_json['email']
+    password = req_json['password']
+    try:
+        user = pb.auth().sign_in_with_email_and_password(email, password)
+        jwt = user['idToken']
+        return JSONResponse(content={'token': jwt}, status_code=200)
+    except:
+        raise HTTPException(detail={'message': 'There was an error logging in'}, status_code=400)
+
 
 @app.post("/new-signup")
-def signup(password: str, user: schemas.UserBase):
+def new_user(password: str, user: schemas.UserBase):
+    """Creates new user, returns new user details if successful"""
     body = {
         "email": user.email,
         "password": password
     }
     response = requests.post(url="http://localhost:8001/signup", json=body)
     if response.status_code == 200:
-        id = json.loads(response.text)["id"]
-        new_user_body = {
-            "id": id,
+        user_id = json.loads(response.text)["id"]
+        new_user_details = {
             "email": user.email,
             "name": user.name,
             "surname": user.surname
         }
-        requests.post(url="http://localhost:8000/new-signup", json=new_user_body)
+        requests.post(url="http://localhost:8000/users/"+user_id, json=new_user_details)
     return response.text
 
-@app.post("/get-user-details")
+
+@app.get("/user")
 def user_details(password: str, email: str):
+    """Attempts to retrieve user details based on email and password.
+    Returns user details if successful"""
     body = {
         "email": email,
         "password": password
@@ -88,11 +92,9 @@ def user_details(password: str, email: str):
     if response.status_code == 200:
         token = json.loads(response.text)["token"]
         user = auth.verify_id_token(token)
-        body = {
-            'id': user["uid"]
-        }
-        response = requests.get(url="http://localhost:8000/user-details", headers=body)
+        response = requests.get(url="http://localhost:8000/users/" + user["uid"])
     return response.text
 
+
 if __name__ == "__main__":
-   uvicorn.run("main:app")
+    uvicorn.run("main:app")
