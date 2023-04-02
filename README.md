@@ -20,16 +20,46 @@ pip install -r requirements.txt -r dev-requirements.txt
 tox
 ```
 
+**We offer two ways to launch the application, manually or using Docker Compose**
+
 ## Docker
 
-There's a docker-composef file all set up, just run:
+You'll need a postgres image, and you can build your own for the app.
+
+```
+docker pull postgres
+docker build --tag IMAGE_NAME .
+```
+
+Where `IMAGE_NAME` is a name to identify the image later.
+
+Then run:
+
+```
+docker network create NETWORK_NAME
+docker run --rm --name user_db --network NETWORK_NAME -e PGUSER=POSTGRES_USERNAME -e POSTGRES_PASSWORD=POSTGRES_PASSWORD
+postgres
+docker run --rm -p 8000:8000 --network NETWORK_NAME --name CONTAINER_NAME IMAGE_NAME
+```
+
+Where `IMAGE_NAME` is the name chosen in the previous step, `CONTAINER_NAME`
+is a name to identify the container running the app and `NETWORK_NAME` is the name chosen
+for the network connecting the containers. `POSTGRES_USERNAME` and `POSTGRES_PASSWORD`
+are self-explanatory.
+
+Notice `--rm` tells docker to remove the container after exists, and
+`-p 8000:8000` maps the port 8000 in the container to the port 8000 in the host.
+
+## Docker-Compose
 
 ```
 docker compose up
 ```
-This will launch two dockerized containers in the same network (a PostgreSQL database and the app itself.)
 
-And in a separate terminal (within _/users_)
+
+# Testing through frontend
+
+The APIs can be tested through a mock frontend in a separate terminal (within _/users_)
 ```
 uvicorn --port 8001 mock_frontend:app --reload
 ```

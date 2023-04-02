@@ -34,14 +34,14 @@ async def root():
     return {"message": "Hello World"}
 
 
-@app.post("/users/{user_id}", include_in_schema=False)
-def signup(user_id: str, user: schemas.UserBase, database: Session = Depends(get_db)):
+@app.post("/users", include_in_schema=False)
+def signup(user: schemas.UserCreate, database: Session = Depends(get_db)):
     """Attempts to create new user in the database based on id and user details.
     Raises exception if user is already present"""
-    db_user = crud.get_user(database, user_id=user_id)
+    db_user = crud.get_user(database, user_id=user.id)
     if db_user:
         raise HTTPException(status_code=400, detail="User already present")
-    return crud.create_user(user_id, database=database, user=user)
+    return crud.create_user(user.id, database=database, user=user)
 
 
 @app.get("/users/{user_id}", include_in_schema=False)

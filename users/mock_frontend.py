@@ -72,11 +72,12 @@ def new_user(password: str, user: schemas.UserBase):
     if response.status_code == 200:
         user_id = json.loads(response.text)["id"]
         new_user_details = {
+            "id": user_id,
             "email": user.email,
             "name": user.name,
             "surname": user.surname
         }
-        requests.post(url="http://localhost:8000/users/"+user_id, json=new_user_details)
+        requests.post(url="http://localhost:8000/users", json=new_user_details)
     return response.text
 
 
