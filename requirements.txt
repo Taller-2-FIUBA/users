@@ -1,3 +1,9 @@
 fastapi[all]
 prometheus-client
 environ-config
+pydantic
+uvicorn
+sqlalchemy
+psycopg2-binary
+pyrebase4
+firebase-admin
