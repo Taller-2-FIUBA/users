@@ -55,13 +55,3 @@ Notice `--rm` tells docker to remove the container after exists, and
 ```
 docker compose up
 ```
-
-
-# Testing through frontend
-
-The APIs can be tested through a mock frontend in a separate terminal (within _/users_)
-```
-uvicorn --port 8001 mock_frontend:app --reload
-```
-The only purpose of mock_frontend is to test the frontend's Firebase functionality, thats
-why it's not *dockerized*.
