@@ -24,3 +24,8 @@ def get_user(database: Session, user_id: str):
 def get_all_users(database: Session):
     """Returns all users currently present in the database"""
     return database.query(models.Users).all()
+
+
+def delete_user(database, user_id):
+    database.query(models.Users).filter(models.Users.id == user_id).delete()
+    database.commit()
