@@ -10,7 +10,7 @@ services:
     healthcheck:
       test: [ "CMD", "pg_isready"]
       timeout: 1s
-      retries: 1
+      retries: 0
     volumes:
       - postgres:/var/lib/postgresql/data
   user_login:

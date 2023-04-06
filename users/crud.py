@@ -1,11 +1,15 @@
-import models
-import schemas
 from sqlalchemy.orm import Session
+from users import models
+from users import schemas
 
 
-def create_user(user_id: str, database: Session, user: schemas.UserBase):
+def create_user(database: Session, user: schemas.User):
     """Creates a new user in the users table, using the id as primary key"""
-    db_user = models.Users(id=user_id, email=user.email, name=user.name, surname=user.surname)
+    db_user = models.Users(id=user.id, email=user.email, username=user.username,
+                           name=user.name, surname=user.surname,
+                           height=user.height, weight=user.weight,
+                           birth_date=user.birth_date, location=user.location,
+                           registration_date=user.registration_date)
     database.add(db_user)
     database.commit()
     database.refresh(db_user)
