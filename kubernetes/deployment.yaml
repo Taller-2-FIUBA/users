@@ -17,3 +17,6 @@ spec:
       containers:
       - name: users
         image: marianocinalli/users:latest
+        ports:
+        - containerPort: 8000
+            name: users-svc
