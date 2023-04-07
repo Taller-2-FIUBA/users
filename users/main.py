@@ -1,5 +1,6 @@
 """Define all endpoints here."""
 import json
+import os
 import firebase_admin
 import pyrebase
 import jwt
@@ -36,7 +37,8 @@ REQUEST_COUNTER = Counter(
     "my_failures", "Description of counter", ["endpoint", "http_verb"]
 )
 CONFIGURATION = to_config(AppConfig)
-models.Base.metadata.create_all(bind=engine)
+if "TESTING" not in os.environ:
+    models.Base.metadata.create_all(bind=engine)
 start_http_server(8002)
 
 

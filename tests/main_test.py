@@ -163,7 +163,7 @@ def test_existing_user_logs_in_correctly(test_db):
     assert response.status_code == 200
 
 
-def test_non_existing_user_raises_exception_at_log_in(test_db):
+def test_non_existing_user_raises_exception_at_login(test_db):
     client.post("users", json=user_2)
     user_emails.append(user_2["email"])
     request = {"email": user_1["email"], "password": user_1["password"]}
