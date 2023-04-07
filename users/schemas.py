@@ -1,9 +1,11 @@
+# pylint: disable=no-name-in-module
+"""Defines models for data exchange in API and between modules."""
 from pydantic import BaseModel
 
 
 class UserBase(BaseModel):
+    """User details."""
 
-    """Basic user details"""
     email: str
     username: str
     name: str
@@ -16,12 +18,17 @@ class UserBase(BaseModel):
 
 
 class UserCreate(UserBase):
-    """User ID, used for creating new users"""
+    """Required for creating a new user, password + details."""
+
     password: str
 
 
 class User(UserBase):
+    """User after being created, id + details."""
+
     id: str
-    pass
+
     class Config:
+        """Required to enable orm."""
+
         orm_mode = True

@@ -1,10 +1,12 @@
+"""Defines table structure for each table in the database."""
+
 from sqlalchemy import Column, String, Integer, Float
 from users.database import Base
 
 
 class Users(Base):
-    """Stores user details: ID, email, username, name, surname, date of birth,
-    weight, username, registration date"""
+    """Table structure for user."""
+
     __tablename__ = "users"
     id = Column(String, primary_key=True, index=True)
     email = Column(String)
