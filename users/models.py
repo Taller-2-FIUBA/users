@@ -1,5 +1,7 @@
 from sqlalchemy import Column, String, Integer, Float
-from users.database import Base
+from sqlalchemy.orm import declarative_base
+
+Base = declarative_base()
 
 
 class Users(Base):
