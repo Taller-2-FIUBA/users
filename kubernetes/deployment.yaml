@@ -19,4 +19,11 @@ spec:
         image: marianocinalli/users:latest
         ports:
         - containerPort: 8000
-            name: users-svc
+          name: users-svc
+        resources:
+          limits:
+            memory: 512Mi
+            cpu: "1"
+          requests:
+            memory: 128Mi
+            cpu: "0.2"
