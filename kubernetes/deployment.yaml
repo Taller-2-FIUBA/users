@@ -1,0 +1,36 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: users
+  labels:
+    app: fiufit
+    tier: users-microservice
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: fiufit
+      tier: users-microservice
+  template:
+    metadata:
+      labels:
+        app: fiufit
+        tier: users-microservice
+    spec:
+      containers:
+      - name: users
+        image: marianocinalli/users:latest
+        envFrom:
+        - configMapRef:
+            name: users-configuration
+        ports:
+          - containerPort: 8000
+            name: http-users
+        resources:
+          limits:
+            memory: 512Mi
+            cpu: "1"
+          requests:
+            memory: 128Mi
+            cpu: "0.2"

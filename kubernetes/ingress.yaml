@@ -1,0 +1,22 @@
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: users-ingress
+  labels:
+    app: fiufit
+    tier: users-ingress
+  annotations:
+    dev.okteto.com/generate-host: "true"
+spec:
+  ingressClassName: users-ingress
+  rules:
+  - http:
+      paths:
+      - path: /users
+        pathType: Prefix
+        backend:
+          service:
+            name: users-service
+            port:
+              name: users-svc
