@@ -1,13 +1,22 @@
-from sqlalchemy import create_engine
-from sqlalchemy.orm import declarative_base
-from sqlalchemy.orm import sessionmaker
+"""Handles database connection."""
+from sqlalchemy import URL
+from sqlalchemy.orm import Session
 
-SQLALCHEMY_DATABASE_URL = "postgresql://postgres:postgres@user_db:5432/postgres"
+from users.config import AppConfig
 
-engine = create_engine(
-    SQLALCHEMY_DATABASE_URL
-)
 
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+def get_database_url(config: AppConfig) -> URL:
+    """Return connection parameters."""
+    return URL.create(
+        drivername=config.db.driver,
+        username=config.db.user,
+        password=config.db.password,
+        host=config.db.host,
+        port=config.db.port,
+        database=config.db.database,
+    )
 
-Base = declarative_base()
+
+def get_db(engine) -> Session:
+    """Create a session."""
+    return Session(autocommit=False, autoflush=False, bind=engine)

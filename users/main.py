@@ -4,15 +4,17 @@ import pyrebase
 from fastapi import FastAPI, HTTPException, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 from environ import to_config
 from prometheus_client import start_http_server, Counter
 from firebase_admin import credentials, auth
+
 from users.config import AppConfig
-from users import crud
-from users import models
-from users import schemas
-from users.database import SessionLocal, engine
+from users.database import get_database_url, get_db
+from users.crud import create_user, delete_user, get_all_users, get_user
+from users.schemas import User, UserCreate
+from users.models import Base
 
 cred = credentials.Certificate("users/taller2-fiufit-firebase-adminsdk-zwduu-404e45eb18.json")
 firebase = firebase_admin.initialize_app(cred)
@@ -29,30 +31,27 @@ app.add_middleware(
     allow_headers=allow_all
 )
 
+CONFIGURATION = to_config(AppConfig)
+
+# Metrics
 REQUEST_COUNTER = Counter(
     "my_failures", "Description of counter", ["endpoint", "http_verb"]
 )
-CONFIGURATION = to_config(AppConfig)
-models.Base.metadata.create_all(bind=engine)
 start_http_server(8002)
 
-
-# Dependency
-def get_db():
-    database = SessionLocal()
-    try:
-        yield database
-    finally:
-        database.close()
+# Database
+engine = create_engine(get_database_url(CONFIGURATION))
+Base.metadata.create_all(bind=engine)
 
 
-def add_user_database(database: Session, user: schemas.User):
+def add_user(session: Session, user: User):
     """Attempts to create new user in the database based on id and user details.
     Raises exception if user is already present"""
-    db_user = crud.get_user(database, user_id=user.id)
-    if db_user:
-        raise HTTPException(status_code=400, detail="User already present")
-    return crud.create_user(database=database, user=user)
+    with session as open_session:
+        db_user = get_user(open_session, user_id=user.id)
+        if db_user:
+            raise HTTPException(status_code=400, detail="User already present")
+        return create_user(session=open_session, user=user)
 
 
 @app.post("/users/login")
@@ -70,7 +69,7 @@ async def login(request: Request):
 
 
 @app.post("/users")
-def create_new_user(new_user: schemas.UserCreate, database: Session = Depends(get_db)):
+def create(new_user: UserCreate, session: Session = Depends(get_db)):
     """Attempts to create new user in Firebase, adds it to the database if successful"""
     if new_user.email is None or new_user.password is None:
         raise HTTPException(detail={'message': 'Error! Missing Email or Password'}, status_code=400)
@@ -82,30 +81,34 @@ def create_new_user(new_user: schemas.UserCreate, database: Session = Depends(ge
     except:
         raise HTTPException(detail={'message': 'Error Creating User'}, status_code=400)
     details = {"id": user.uid} | new_user.dict()
-    return add_user_database(database, schemas.User(**details))
+    with session as open_session:
+        return add_user(open_session, User(**details))
 
 
 @app.get("/users/{id}")
-async def user_details(id: str, database: Session = Depends(get_db)):
+async def get_one(id: str, session: Session = Depends(get_db)):
     """Retrieves details for users with specified id"""
-    db_user = crud.get_user(database, user_id=id)
+    with session as open_session:
+        db_user = get_user(open_session, user_id=id)
     if db_user is None:
         raise HTTPException(status_code=404, detail="User not found")
     return db_user
 
 
 @app.delete("/users", include_in_schema = False)
-async def delete_user(email: str, database: Session = Depends(get_db)):
+async def delete(email: str, session: Session = Depends(get_db)):
     """Deletes users with specified email and password"""
     new_user = auth.get_user_by_email(email)
-    db_user = crud.get_user(database, user_id=new_user.uid)
-    if db_user is None:
-        return
-    auth.delete_user(new_user.uid)
-    crud.delete_user(database, user_id=new_user.uid)
+    with session as open_session:
+        db_user = get_user(open_session, new_user.uid)
+        if db_user is None:
+            return
+        auth.delete_user(new_user.uid)
+        delete_user(open_session, new_user.uid)
 
 
 @app.get("/users/")
-async def get_all_users(database: Session = Depends(get_db)):
+async def get_all(session: Session = Depends(get_db)):
     """Retrieves details for all users currently present in the database"""
-    return crud.get_all_users(database=database)
+    with session as open_session:
+        return get_all_users(open_session)
