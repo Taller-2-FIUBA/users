@@ -17,6 +17,9 @@ spec:
       containers:
       - name: users
         image: marianocinalli/users:latest
+        envFrom:
+        - configMapRef:
+            name: users-configuration
         ports:
         - containerPort: 8000
           name: users-svc
