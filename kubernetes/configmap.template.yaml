@@ -10,4 +10,5 @@ metadata:
 data:
   USERS_DB_DATABASE: "fiufit"
   USERS_DB_USER: "backend"
+  USERS_DB_PASSWORD: $USERS_DB_PASSWORD
   USERS_DB_HOST: "dpg-cgno8m8rddl9mmvdaja0-a.oregon-postgres.render.com"

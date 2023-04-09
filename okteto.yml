@@ -1,4 +1,5 @@
 deploy:
+  - envsubst < kubernetes/configmap.template.yaml > kubernetes/configmap.yaml
   - kubectl apply -f kubernetes/configmap.yaml
   - kubectl apply -f kubernetes/deployment.yaml
   - kubectl apply -f kubernetes/service.yaml
