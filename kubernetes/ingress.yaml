@@ -2,9 +2,12 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
+  name: users-ingress
+  labels:
+    app: fiufit
+    tier: users-ingress
   annotations:
     dev.okteto.com/generate-host: "true"
-  name: hello-world
 spec:
   ingressClassName: users-ingress
   rules:
@@ -16,4 +19,4 @@ spec:
           service:
             name: users-service
             port:
-              name: users
+              name: users-svc

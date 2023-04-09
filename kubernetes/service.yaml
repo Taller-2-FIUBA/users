@@ -4,13 +4,15 @@ kind: Service
 metadata:
   name: users-service
   labels:
-    app: users
+    app: fiufit
+    tier: users-service
 spec:
   type: ClusterIP
   ports:
-  - name: users
+  - name: users-svc
     protocol: TCP
-    port: 80
-    targetPort: http-users-svc
+    port: 8000
+    targetPort: http-users
   selector:
-    app: users
+    app: fiufit
+    tier: users-microservice
