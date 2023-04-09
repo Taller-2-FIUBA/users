@@ -3,7 +3,6 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: users-configuration
-  namespace: taller2-marianocinalli
   labels:
     app: fiufit
     tier: users-microservice

@@ -3,7 +3,6 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: users
-  namespace: taller2-marianocinalli
 spec:
   replicas: 1
   selector:
