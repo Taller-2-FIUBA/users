@@ -7,4 +7,8 @@ setup(
     version='1.0',
     description='Service to interact with users.',
     author='Grupo 5',
+    packages=['kubernetes'],
+    package_dir={
+    	'kubernetes': 'users'
+    }
 )

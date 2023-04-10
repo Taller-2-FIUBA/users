@@ -20,4 +20,4 @@ class AppConfig:
         port = var(5432, converter=int)
         database = var("postgres")
 
-    db = group(DB) # type: ignore
+    db = group(DB)  # type: ignore
