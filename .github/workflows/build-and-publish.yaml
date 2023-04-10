@@ -22,7 +22,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@98669ae865ea3cffbcbaa878cf57c20bbf1c6c38
         with:
-          images: marianocinalli/taller2
+          images: marianocinalli/users
 
       - name: Build and push Docker image
         uses: docker/build-push-action@ad44023a93711e3deb337508980b4b5e9bcdc5dc
@@ -40,7 +40,7 @@ jobs:
       - name: Activate Namespace
         uses: okteto/namespace@latest
         with:
-            name: taller2-marianocinalli
+            namespace: taller2-marianocinalli
 
       - name: Trigger the pipeline
         uses: okteto/pipeline@latest
