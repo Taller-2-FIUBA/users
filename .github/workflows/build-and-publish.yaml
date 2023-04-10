@@ -31,3 +31,20 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+
+      - name: Okteto context
+        uses: okteto/context@latest
+        with:
+            token: ${{ secrets.OKTETO_TOKEN }}
+
+      - name: Activate Namespace
+        uses: okteto/namespace@latest
+        with:
+            name: taller2-marianocinalli
+
+      - name: Trigger the pipeline
+        uses: okteto/pipeline@latest
+        with:
+            name: pr-${{ github.event.number }}
+            timeout: 8m
+            variables: "NAMESPACE=taller2-marianocinalli"
