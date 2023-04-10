@@ -14,7 +14,7 @@ from prometheus_client import start_http_server, Counter
 from firebase_admin import credentials, auth
 
 from users.config import AppConfig
-from users.database import get_database_url, get_db
+from users.database import get_database_url
 from users.crud import create_user, delete_user, get_all_users, get_user
 from users.schemas import User, UserCreate
 from users.models import Base
@@ -43,10 +43,19 @@ REQUEST_COUNTER = Counter(
 )
 start_http_server(8002)
 
-# Database
-engine = create_engine(get_database_url(CONFIGURATION))
+# Database initialization.
+# Maybe move this so it is only run when required? Now it runs when ever
+# the application is started, and we may not need to create the database
+# structure.
+ENGINE = create_engine(get_database_url(CONFIGURATION))
 if "TESTING" not in os.environ:
-    Base.metadata.create_all(bind=engine)
+    Base.metadata.create_all(bind=ENGINE)
+
+
+# Helper methods.
+def get_db() -> Session:
+    """Create a session."""
+    return Session(autocommit=False, autoflush=False, bind=ENGINE)
 
 
 def add_user(session: Session, user: User):
@@ -58,6 +67,7 @@ def add_user(session: Session, user: User):
         return create_user(session=open_session, user=user)
 
 
+# Endpoint definition
 @app.post("/users/login")
 async def login(request: Request):
     """Log in to Firebase with email, password. Return token if successful."""

@@ -1,6 +1,5 @@
 """Handles database connection."""
 from sqlalchemy import URL
-from sqlalchemy.orm import Session
 
 from users.config import AppConfig
 
@@ -15,8 +14,3 @@ def get_database_url(config: AppConfig) -> URL:
         port=config.db.port,
         database=config.db.database,
     )
-
-
-def get_db(engine) -> Session:
-    """Create a session."""
-    return Session(autocommit=False, autoflush=False, bind=engine)
