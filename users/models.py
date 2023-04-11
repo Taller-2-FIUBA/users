@@ -20,3 +20,12 @@ class Users(Base):
     birth_date = Column(String)
     location = Column(String)
     registration_date = Column(String)
+
+
+class Admin(Base):
+    """Table structure for admin."""
+
+    __tablename__ = "admin"
+    id = Column(String, primary_key=True, index=True)
+    email = Column(String)
+    username = Column(String)

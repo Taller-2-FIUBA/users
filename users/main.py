@@ -18,6 +18,8 @@ from users.database import get_database_url
 from users.crud import create_user, delete_user, get_all_users, get_user
 from users.schemas import User, UserCreate
 from users.models import Base
+from users.admin.dao import create_admin, get_all as get_all_admins
+from users.admin.dto import AdminCreationDTO, AdminDTO
 
 cred = credentials.Certificate("users/fiufit-backend-keys.json")
 firebase = firebase_admin.initialize_app(cred)
@@ -80,7 +82,7 @@ async def login(request: Request):
         msg = "Error logging in"
         raise HTTPException(detail=msg, status_code=400) from login_exception
     user_id = auth.get_user_by_email(email).uid
-    data = {"id": user_id, "role": "admin"}
+    data = {"id": user_id}
     encoded = jwt.encode(data, "secret", algorithm="HS256")
     body = {"token": encoded, "id": user_id}
     return JSONResponse(content=body, status_code=200)
@@ -132,3 +134,54 @@ async def get_all(session: Session = Depends(get_db)):
     """Retrieve details for all users currently present in the database."""
     with session as open_session:
         return get_all_users(open_session)
+
+
+# Admin endpoints. Maybe move to their own module.
+@app.post("/admins")
+async def add_admin(
+    new_admin: AdminCreationDTO,
+    session: Session = Depends(get_db)
+):
+    """Create an admin."""
+    if new_admin.email is None:
+        msg = {'message': 'Error! Missing Email.'}
+        raise HTTPException(detail=msg, status_code=400)
+    if new_admin.password is None:
+        msg = {'message': 'Error! Missing Password.'}
+        raise HTTPException(detail=msg, status_code=400)
+    try:
+        firebase_user = auth.create_user(
+            email=new_admin.email,
+            password=new_admin.password
+        )
+    except Exception as signup_exception:
+        msg = {'message': 'Error Creating User'}
+        raise HTTPException(detail=msg, status_code=400) from signup_exception
+    fields_and_values = {"id": firebase_user.uid} | new_admin.dict()
+    with session as open_session:
+        return create_admin(open_session, AdminDTO(**fields_and_values))
+
+
+@app.get("/admins")
+async def get_admins(session: Session = Depends(get_db)):
+    """Return all administrators."""
+    with session as open_session:
+        return get_all_admins(open_session)
+
+
+@app.post("/admins/login")
+async def admin_login(request: Request):
+    """Login as administrator. Return token if successful."""
+    req_json = await request.json()
+    email = req_json['email']
+    password = req_json['password']
+    try:
+        pb.auth().sign_in_with_email_and_password(email, password)
+    except Exception as login_exception:
+        msg = "Error logging in"
+        raise HTTPException(detail=msg, status_code=400) from login_exception
+    user_id = auth.get_user_by_email(email).uid
+    data = {"role": "admin"}
+    encoded = jwt.encode(data, "secret", algorithm="HS256")
+    body = {"token": encoded, "id": user_id}
+    return JSONResponse(content=body, status_code=200)
