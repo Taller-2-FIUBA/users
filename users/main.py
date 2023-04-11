@@ -18,6 +18,8 @@ from users.database import get_database_url
 from users.crud import create_user, delete_user, get_all_users, get_user
 from users.schemas import User, UserCreate
 from users.models import Base
+from users.admin.dao import create_admin
+from users.admin.dto import AdminCreationDTO, AdminDTO
 
 cred = credentials.Certificate("users/fiufit-backend-keys.json")
 firebase = firebase_admin.initialize_app(cred)
@@ -132,3 +134,28 @@ async def get_all(session: Session = Depends(get_db)):
     """Retrieve details for all users currently present in the database."""
     with session as open_session:
         return get_all_users(open_session)
+
+
+@app.post("/admins")
+async def add_admin(
+    new_admin: AdminCreationDTO,
+    session: Session = Depends(get_db)
+):
+    """Create an admin."""
+    if new_admin.email is None:
+        msg = {'message': 'Error! Missing Email.'}
+        raise HTTPException(detail=msg, status_code=400)
+    if new_admin.password is None:
+        msg = {'message': 'Error! Missing Password.'}
+        raise HTTPException(detail=msg, status_code=400)
+    try:
+        firebase_user = auth.create_user(
+            email=new_admin.email,
+            password=new_admin.password
+        )
+    except Exception as signup_exception:
+        msg = {'message': 'Error Creating User'}
+        raise HTTPException(detail=msg, status_code=400) from signup_exception
+    fields_and_values = {"id": firebase_user.uid} | new_admin.dict()
+    with session as open_session:
+        return create_admin(open_session, AdminDTO(**fields_and_values))
