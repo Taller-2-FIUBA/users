@@ -32,19 +32,25 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
 
-      - name: Okteto context
-        uses: okteto/context@latest
-        with:
-            token: ${{ secrets.OKTETO_TOKEN }}
+  okteto_deployment:
+    runs-on: ubuntu-latest
+    steps:
+    - name: checkout
+      uses: actions/checkout@master
 
-      - name: Activate Namespace
-        uses: okteto/namespace@latest
-        with:
-            namespace: taller2-marianocinalli
+    - name: Okteto context
+      uses: okteto/context@latest
+      with:
+        token: ${{ secrets.OKTETO_TOKEN }}
 
-      - name: Trigger the pipeline
-        uses: okteto/pipeline@latest
-        with:
-            name: pr-${{ github.event.number }}
-            timeout: 8m
-            variables: "NAMESPACE=taller2-marianocinalli"
+    - name: Activate Namespace
+      uses: okteto/namespace@latest
+      with:
+        namespace: taller2-marianocinalli
+
+    - name: Trigger the pipeline
+      uses: okteto/pipeline@latest
+      with:
+        name: users
+        timeout: 8m
+        variables: "NAMESPACE=taller2-marianocinalli"
