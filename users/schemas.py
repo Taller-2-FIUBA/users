@@ -15,6 +15,7 @@ class UserBase(BaseModel):
     birth_date: str
     location: str
     registration_date: str
+    is_athlete: bool
 
 
 class UserCreate(UserBase):

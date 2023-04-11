@@ -10,16 +10,22 @@ def create_user(session: Session, user: User):
                     name=user.name, surname=user.surname,
                     height=user.height, weight=user.weight,
                     birth_date=user.birth_date, location=user.location,
-                    registration_date=user.registration_date)
+                    registration_date=user.registration_date,
+                    is_athlete=user.is_athlete)
     session.add(db_user)
     session.commit()
     session.refresh(db_user)
     return db_user
 
 
-def get_user(session: Session, user_id: str):
+def get_user_by_id(session: Session, user_id: str):
     """Return details from a user identified by a certain user id."""
     return session.query(Users).filter(Users.id == user_id).first()
+
+
+def get_user_by_username(session: Session, username: str):
+    """Return details from a user identified by a certain username."""
+    return session.query(Users).filter(Users.username == username).first()
 
 
 def get_all_users(session: Session):
