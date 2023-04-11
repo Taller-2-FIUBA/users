@@ -18,7 +18,7 @@ from users.database import get_database_url
 from users.crud import create_user, delete_user, get_all_users, get_user
 from users.schemas import User, UserCreate
 from users.models import Base
-from users.admin.dao import create_admin
+from users.admin.dao import create_admin, get_all as get_all_admins
 from users.admin.dto import AdminCreationDTO, AdminDTO
 
 cred = credentials.Certificate("users/fiufit-backend-keys.json")
@@ -135,7 +135,7 @@ async def get_all(session: Session = Depends(get_db)):
     with session as open_session:
         return get_all_users(open_session)
 
-
+# Admin endpoints. Maybe move to their own module.
 @app.post("/admins")
 async def add_admin(
     new_admin: AdminCreationDTO,
@@ -159,3 +159,10 @@ async def add_admin(
     fields_and_values = {"id": firebase_user.uid} | new_admin.dict()
     with session as open_session:
         return create_admin(open_session, AdminDTO(**fields_and_values))
+
+
+@app.get("/admins")
+async def get_admins(session: Session = Depends(get_db)):
+    """Return all administrators."""
+    with session as open_session:
+        return get_all_admins(open_session)
