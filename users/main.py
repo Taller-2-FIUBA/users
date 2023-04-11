@@ -82,7 +82,7 @@ async def login(request: Request):
         msg = "Error logging in"
         raise HTTPException(detail=msg, status_code=400) from login_exception
     user_id = auth.get_user_by_email(email).uid
-    data = {"id": user_id, "role": "admin"}
+    data = {"id": user_id}
     encoded = jwt.encode(data, "secret", algorithm="HS256")
     body = {"token": encoded, "id": user_id}
     return JSONResponse(content=body, status_code=200)
@@ -135,6 +135,7 @@ async def get_all(session: Session = Depends(get_db)):
     with session as open_session:
         return get_all_users(open_session)
 
+
 # Admin endpoints. Maybe move to their own module.
 @app.post("/admins")
 async def add_admin(
@@ -166,3 +167,21 @@ async def get_admins(session: Session = Depends(get_db)):
     """Return all administrators."""
     with session as open_session:
         return get_all_admins(open_session)
+
+
+@app.post("/admins/login")
+async def admin_login(request: Request):
+    """Login as administrator. Return token if successful."""
+    req_json = await request.json()
+    email = req_json['email']
+    password = req_json['password']
+    try:
+        pb.auth().sign_in_with_email_and_password(email, password)
+    except Exception as login_exception:
+        msg = "Error logging in"
+        raise HTTPException(detail=msg, status_code=400) from login_exception
+    user_id = auth.get_user_by_email(email).uid
+    data = {"role": "admin"}
+    encoded = jwt.encode(data, "secret", algorithm="HS256")
+    body = {"token": encoded, "id": user_id}
+    return JSONResponse(content=body, status_code=200)

@@ -9,10 +9,12 @@ class AdminDTO(BaseModel):
     id: str
     username: str
     email: str
+
     class Config:
         """Required to enable orm."""
 
         orm_mode = True
+
 
 class AdminCreationDTO(BaseModel):
     """Data necessary to create an admin."""
