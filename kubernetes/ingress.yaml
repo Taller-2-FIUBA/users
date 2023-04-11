@@ -20,3 +20,10 @@ spec:
             name: users-service
             port:
               name: users-svc
+      - path: /admins
+        pathType: Prefix
+        backend:
+          service:
+            name: users-service
+            port:
+              name: users-svc
