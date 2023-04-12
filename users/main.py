@@ -1,6 +1,7 @@
 """Define all endpoints here."""
 import json
 import os
+from typing import Optional
 import firebase_admin
 import pyrebase
 import jwt
@@ -12,11 +13,11 @@ from sqlalchemy.orm import Session
 from environ import to_config
 from prometheus_client import start_http_server, Counter
 from firebase_admin import credentials, auth
-from typing import Optional
 
 from users.config import AppConfig
 from users.database import get_database_url
-from users.crud import create_user, delete_user, get_all_users, get_user_by_id, get_user_by_username
+from users.crud import create_user, delete_user, get_all_users, \
+    get_user_by_id, get_user_by_username
 from users.schemas import User, UserCreate
 from users.models import Base
 from users.admin.dao import create_admin, get_all as get_all_admins
@@ -131,7 +132,8 @@ async def delete(email: str, session: Session = Depends(get_db)):
 
 
 @app.get("/users")
-async def get_all(username: Optional[str] = None, session: Session = Depends(get_db)):
+async def get_all(username: Optional[str] = None,
+                  session: Session = Depends(get_db)):
     """Retrieve details for all users currently present in the database."""
     with session as open_session:
         if username is None:

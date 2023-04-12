@@ -205,10 +205,10 @@ def test_cannot_retrieve_user_with_incorrect_username(test_db):
 
 def test_can_retrieve_several_users_with_their_usernames(test_db):
     users = [user_1, user_2, user_3]
-    for i in range(3):
-        create_response = client.post("users", json=users[i])
-        user_emails.append(users[i]["email"])
+    for idx in range(3):
+        create_response = client.post("users", json=users[idx])
+        user_emails.append(users[idx]["email"])
         user_string = "users?username=" + create_response.json()["username"]
         get_response = client.get(user_string)
         assert get_response.status_code == 200
-        assert equal_dicts(get_response.json(), users[i], {"id", "password"})
+        assert equal_dicts(get_response.json(), users[idx], {"id", "password"})
