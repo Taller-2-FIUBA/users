@@ -5,7 +5,7 @@ from typing import Optional
 import firebase_admin
 import pyrebase
 import jwt
-from fastapi import FastAPI, HTTPException, Depends, Request
+from fastapi import FastAPI, HTTPException, Depends, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import create_engine
@@ -16,9 +16,15 @@ from firebase_admin import credentials, auth
 
 from users.config import AppConfig
 from users.database import get_database_url
-from users.crud import create_user, delete_user, get_all_users, \
-    get_user_by_id, get_user_by_username
-from users.schemas import User, UserCreate
+from users.crud import (
+    create_user,
+    delete_user,
+    get_all_users,
+    get_user_by_id,
+    get_user_by_username,
+    update_user
+)
+from users.schemas import User, UserCreate, UserUpdate
 from users.models import Base
 from users.admin.dao import create_admin, get_all as get_all_admins
 from users.admin.dto import AdminCreationDTO, AdminDTO
@@ -131,9 +137,27 @@ async def delete(email: str, session: Session = Depends(get_db)):
         delete_user(open_session, user_id=new_user.uid)
 
 
+@app.patch("/users/{_id}")
+async def patch_user(
+    _id: str,
+    user: UserUpdate,
+    session: Session = Depends(get_db)
+):
+    """Update user data."""
+    with session as open_session:
+        if get_user_by_id(open_session, user_id=_id) is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+            )
+        update_user(session, _id, user)
+    return JSONResponse({}, status_code=status.HTTP_204_NO_CONTENT)
+
+
 @app.get("/users")
-async def get_all(username: Optional[str] = None,
-                  session: Session = Depends(get_db)):
+async def get_all(
+    username: Optional[str] = None,
+    session: Session = Depends(get_db)
+):
     """Retrieve details for all users currently present in the database."""
     with session as open_session:
         if username is None:
