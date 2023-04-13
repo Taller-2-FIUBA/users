@@ -1,5 +1,6 @@
 # pylint: disable=no-name-in-module
 """Defines models for data exchange in API and between modules."""
+from typing import Optional
 from pydantic import BaseModel
 
 
@@ -16,6 +17,18 @@ class UserBase(BaseModel):
     location: str
     registration_date: str
     is_athlete: bool
+
+
+class UserUpdate(BaseModel):
+    """User details to be updated."""
+
+    username: Optional[str]
+    name: Optional[str]
+    surname: Optional[str]
+    height: Optional[float]
+    weight: Optional[int]
+    birth_date: Optional[str]
+    location: Optional[str]
 
 
 class UserCreate(UserBase):

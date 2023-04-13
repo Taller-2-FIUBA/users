@@ -92,6 +92,19 @@ user_3 = {
     "is_athlete": True
 }
 
+user_to_update = {
+    "password": "pass22word1",
+    "username": "old_username",
+    "email": "ema1il12@abcd.com",
+    "name": "old_name",
+    "surname": "old_surname",
+    "height": 1.1,
+    "weight": 800,
+    "birth_date": "23-4-1999",
+    "location": "Cordoba, Cordoba",
+    "registration_date": "23-3-2022"
+}
+
 
 def equal_dicts(dict1, dict2, ignore_keys):
     d1_filtered = {k: v for k, v in dict1.items() if k not in ignore_keys}
@@ -212,3 +225,75 @@ def test_can_retrieve_several_users_with_their_usernames(test_db):
         get_response = client.get(user_string)
         assert get_response.status_code == 200
         assert equal_dicts(get_response.json(), users[idx], {"id", "password"})
+def test_when_updating_user_data_expect_data(test_db):
+    response_post = client.post("users", json=user_to_update)
+    user_emails.append(user_to_update["email"])
+    assert response_post.status_code == 200
+    response_patch = client.patch(
+        "users/" + response_post.json()["id"],
+        json={
+            "username": "new_username",
+            "name": "new_name",
+            "surname": "new_surname",
+            "height": 2.0,
+            "weight": 100,
+            "birth_date": "23-6-2000",
+            "location": "Place, AnotherPlace",
+        }
+    )
+    assert response_patch.status_code == 204
+    assert response_patch.json() == {}
+    response_get = client.get("users/" + response_post.json()["id"])
+    assert response_get.status_code == 200
+    assert equal_dicts(
+        response_get.json(),
+        {
+            "surname": "new_surname",
+            "username": "new_username",
+            "weight": 100,
+            "location": "Place, AnotherPlace",
+            "name": "new_name",
+            "email": "ema1il12@abcd.com",
+            "height": 2.0,
+            "birth_date": "23-6-2000",
+            "registration_date": "23-3-2022"
+        },
+        {"id"}
+    )
+
+
+def test_when_update_user_height_and_weight_expect_height_and_weight(test_db):
+    response_post = client.post("users", json=user_to_update)
+    user_emails.append(user_to_update["email"])
+    assert response_post.status_code == 200
+    response_patch = client.patch(
+        "users/" + response_post.json()["id"],
+        json={
+            "height": 2.0,
+            "weight": 100,
+        }
+    )
+    assert response_patch.status_code == 204
+    assert response_patch.json() == {}
+    response_get = client.get("users/" + response_post.json()["id"])
+    assert response_get.status_code == 200
+    assert equal_dicts(
+        response_get.json(),
+        {
+            "surname": "old_surname",
+            "username": "old_username",
+            "weight": 100,
+            "location": "Cordoba, Cordoba",
+            "name": "old_name",
+            "email": "ema1il12@abcd.com",
+            "height": 2.0,
+            "birth_date": "23-4-1999",
+            "registration_date": "23-3-2022"
+        },
+        {"id"}
+    )
+
+
+def test_when_update_user_id_banana_expect_not_found(test_db):
+    response_patch = client.patch("users/banana", json={"height": 2.0})
+    assert response_patch.status_code == 404
