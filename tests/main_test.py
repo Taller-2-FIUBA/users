@@ -45,7 +45,7 @@ user_emails = []
 
 
 def test_database_empty_at_start(test_db):
-    response = client.get("users/")
+    response = client.get("users")
     assert response.status_code == 200
     assert response.json() == []
 
@@ -61,6 +61,7 @@ user_1 = {
     "birth_date": "23-4-1990",
     "location": "Buenos Aires, Argentina",
     "registration_date": "23-4-2023",
+    "is_athlete": True
 }
 
 user_2 = {
@@ -74,6 +75,7 @@ user_2 = {
     "birth_date": "23-4-1987",
     "location": "Rosario, Santa Fe",
     "registration_date": "23-3-2023",
+    "is_athlete": False
 }
 
 user_3 = {
@@ -87,6 +89,7 @@ user_3 = {
     "birth_date": "23-4-1999",
     "location": "Cordoba, Cordoba",
     "registration_date": "23-3-2022",
+    "is_athlete": True
 }
 
 
@@ -181,3 +184,31 @@ def test_token_has_expected_data(test_db):
     dec_token = jwt.decode(ret_token, "secret", algorithms="HS256")
     assert login_response.status_code == 200
     assert dec_token == {"id": create_response.json()["id"]}
+
+
+def test_can_retrieve_user_with_his_username(test_db):
+    create_response = client.post("users", json=user_2)
+    user_emails.append(user_2["email"])
+    user_string = "users?username=" + create_response.json()["username"]
+    get_response = client.get(user_string)
+    assert get_response.status_code == 200
+    assert equal_dicts(get_response.json(), user_2, {"id", "password"})
+
+
+def test_cannot_retrieve_user_with_incorrect_username(test_db):
+    client.post("users", json=user_2)
+    user_emails.append(user_2["email"])
+    user_string = "users?username=" + "wrong_username"
+    get_response = client.get(user_string)
+    assert get_response.status_code == 404
+
+
+def test_can_retrieve_several_users_with_their_usernames(test_db):
+    users = [user_1, user_2, user_3]
+    for idx in range(3):
+        create_response = client.post("users", json=users[idx])
+        user_emails.append(users[idx]["email"])
+        user_string = "users?username=" + create_response.json()["username"]
+        get_response = client.get(user_string)
+        assert get_response.status_code == 200
+        assert equal_dicts(get_response.json(), users[idx], {"id", "password"})

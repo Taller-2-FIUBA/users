@@ -1,6 +1,6 @@
 """Defines table structure for each table in the database."""
 
-from sqlalchemy import Column, String, Integer, Float
+from sqlalchemy import Column, String, Integer, Float, Boolean
 from sqlalchemy.orm import declarative_base
 
 Base = declarative_base()
@@ -20,6 +20,7 @@ class Users(Base):
     birth_date = Column(String)
     location = Column(String)
     registration_date = Column(String)
+    is_athlete = Column(Boolean)
 
 
 class Admin(Base):

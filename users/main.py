@@ -1,6 +1,7 @@
 """Define all endpoints here."""
 import json
 import os
+from typing import Optional
 import firebase_admin
 import pyrebase
 import jwt
@@ -15,7 +16,8 @@ from firebase_admin import credentials, auth
 
 from users.config import AppConfig
 from users.database import get_database_url
-from users.crud import create_user, delete_user, get_all_users, get_user
+from users.crud import create_user, delete_user, get_all_users, \
+    get_user_by_id, get_user_by_username
 from users.schemas import User, UserCreate
 from users.models import Base
 from users.admin.dao import create_admin, get_all as get_all_admins
@@ -63,7 +65,7 @@ def get_db() -> Session:
 def add_user(session: Session, user: User):
     """Create new user in the database based on id and user details."""
     with session as open_session:
-        db_user = get_user(open_session, user_id=user.id)
+        db_user = get_user_by_id(open_session, user_id=user.id)
         if db_user:
             raise HTTPException(status_code=400, detail="User already present")
         return create_user(session=open_session, user=user)
@@ -111,7 +113,7 @@ def create(new_user: UserCreate, session: Session = Depends(get_db)):
 async def get_one(_id: str, session: Session = Depends(get_db)):
     """Retrieve details for users with specified id."""
     with session as open_session:
-        db_user = get_user(open_session, user_id=_id)
+        db_user = get_user_by_id(open_session, user_id=_id)
     if db_user is None:
         raise HTTPException(status_code=404, detail="User not found")
     return db_user
@@ -122,18 +124,24 @@ async def delete(email: str, session: Session = Depends(get_db)):
     """Delete users with specified email and password."""
     new_user = auth.get_user_by_email(email)
     with session as open_session:
-        db_user = get_user(open_session, new_user.uid)
+        db_user = get_user_by_id(open_session, new_user.uid)
         if db_user is None:
             return
         auth.delete_user(new_user.uid)
         delete_user(open_session, user_id=new_user.uid)
 
 
-@app.get("/users/")
-async def get_all(session: Session = Depends(get_db)):
+@app.get("/users")
+async def get_all(username: Optional[str] = None,
+                  session: Session = Depends(get_db)):
     """Retrieve details for all users currently present in the database."""
     with session as open_session:
-        return get_all_users(open_session)
+        if username is None:
+            return get_all_users(open_session)
+        db_user = get_user_by_username(open_session, username=username)
+    if db_user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    return db_user
 
 
 # Admin endpoints. Maybe move to their own module.
