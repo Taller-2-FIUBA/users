@@ -102,7 +102,8 @@ user_to_update = {
     "weight": 800,
     "birth_date": "23-4-1999",
     "location": "Cordoba, Cordoba",
-    "registration_date": "23-3-2022"
+    "registration_date": "23-3-2022",
+    "is_athlete": True
 }
 
 
@@ -225,6 +226,8 @@ def test_can_retrieve_several_users_with_their_usernames(test_db):
         get_response = client.get(user_string)
         assert get_response.status_code == 200
         assert equal_dicts(get_response.json(), users[idx], {"id", "password"})
+
+
 def test_when_updating_user_data_expect_data(test_db):
     response_post = client.post("users", json=user_to_update)
     user_emails.append(user_to_update["email"])
@@ -256,7 +259,8 @@ def test_when_updating_user_data_expect_data(test_db):
             "email": "ema1il12@abcd.com",
             "height": 2.0,
             "birth_date": "23-6-2000",
-            "registration_date": "23-3-2022"
+            "registration_date": "23-3-2022",
+            "is_athlete": True
         },
         {"id"}
     )
@@ -288,7 +292,8 @@ def test_when_update_user_height_and_weight_expect_height_and_weight(test_db):
             "email": "ema1il12@abcd.com",
             "height": 2.0,
             "birth_date": "23-4-1999",
-            "registration_date": "23-3-2022"
+            "registration_date": "23-3-2022",
+            "is_athlete": True
         },
         {"id"}
     )

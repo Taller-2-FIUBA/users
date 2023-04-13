@@ -145,7 +145,7 @@ async def patch_user(
 ):
     """Update user data."""
     with session as open_session:
-        if get_user(open_session, user_id=_id) is None:
+        if get_user_by_id(open_session, user_id=_id) is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
             )
