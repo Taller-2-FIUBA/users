@@ -4,7 +4,7 @@ import os
 from typing import Optional
 import firebase_admin
 import pyrebase
-import jwt
+
 from fastapi import FastAPI, HTTPException, Depends, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -14,6 +14,8 @@ from environ import to_config
 from prometheus_client import start_http_server, Counter
 from firebase_admin import credentials, auth
 
+from users.auth.auth_bearer import JWTBearer
+from users.auth.auth_operations import encode_token, decode_token
 from users.config import AppConfig
 from users.database import get_database_url
 from users.crud import (
@@ -90,9 +92,7 @@ async def login(request: Request):
         msg = "Error logging in"
         raise HTTPException(detail=msg, status_code=400) from login_exception
     user_id = auth.get_user_by_email(email).uid
-    data = {"id": user_id}
-    encoded = jwt.encode(data, "secret", algorithm="HS256")
-    body = {"token": encoded, "id": user_id}
+    body = {"token": encode_token("user", user_id), "id": user_id}
     return JSONResponse(content=body, status_code=200)
 
 
@@ -123,6 +123,15 @@ async def get_one(_id: str, session: Session = Depends(get_db)):
     if db_user is None:
         raise HTTPException(status_code=404, detail="User not found")
     return db_user
+
+
+@app.post("/validation-test", dependencies=[Depends(JWTBearer())])
+async def test(request: Request):
+    """Check if token is valid. Only for demonstration."""
+    token = request.headers.get("Authorization").split(' ')[1]
+    token = decode_token(token)
+    if not token["role"] == "admin" or not token["id"] == "magicword":
+        raise HTTPException(status_code=403, detail="Invalid credentials")
 
 
 @app.delete("/users", include_in_schema=False)
@@ -213,7 +222,5 @@ async def admin_login(request: Request):
         msg = "Error logging in"
         raise HTTPException(detail=msg, status_code=400) from login_exception
     user_id = auth.get_user_by_email(email).uid
-    data = {"role": "admin"}
-    encoded = jwt.encode(data, "secret", algorithm="HS256")
-    body = {"token": encoded, "id": user_id}
+    body = {"token": encode_token("admin", user_id), "id": user_id}
     return JSONResponse(content=body, status_code=200)

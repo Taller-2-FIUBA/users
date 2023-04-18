@@ -197,7 +197,7 @@ def test_token_has_expected_data(test_db):
     ret_token = login_response.json()["token"]
     dec_token = jwt.decode(ret_token, "secret", algorithms="HS256")
     assert login_response.status_code == 200
-    assert dec_token == {"id": create_response.json()["id"]}
+    assert dec_token == {"role": "user", "id": create_response.json()["id"]}
 
 
 def test_can_retrieve_user_with_his_username(test_db):
