@@ -40,6 +40,7 @@ def delete_user(session: Session, user_id: str):
 
 
 def change_blocked_status(session: Session, user_id: str):
+    """Inverts blocked status for user with provided id."""
     db_user = session.query(Users).filter(Users.id == user_id).first()
     db_user.is_blocked = not db_user.is_blocked
     session.commit()

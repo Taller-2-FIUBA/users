@@ -13,10 +13,11 @@ from sqlalchemy.orm import Session
 from environ import to_config
 from prometheus_client import start_http_server, Counter
 from firebase_admin import credentials, auth
-from fastapi_pagination import LimitOffsetPage, add_pagination, paginate, Params
+from fastapi_pagination import LimitOffsetPage, add_pagination, \
+    paginate, Params
 
 from users.auth.auth_bearer import JWTBearer
-from users.auth.auth_operations import encode_token, decode_token, get_token
+from users.auth.auth_operations import encode_token, get_token
 from users.config import AppConfig
 from users.database import get_database_url
 from users.crud import (
@@ -119,7 +120,11 @@ def create(new_user: UserCreate, session: Session = Depends(get_db)):
 
 
 @app.get("/users/{_id}", dependencies=[Depends(JWTBearer())])
-async def get_one(request: Request, _id: str, session: Session = Depends(get_db)):
+async def get_one(
+    request: Request,
+    _id: str,
+    session: Session = Depends(get_db)
+):
     """Retrieve details for users with specified id."""
     token = get_token(request)
     if not token["role"] == "admin" and not token["role"] == "user":
@@ -140,9 +145,13 @@ async def test(request: Request):
 
 
 @app.patch("/users/status/{_id}", dependencies=[Depends(JWTBearer())])
-async def change_status(request: Request, _id: str, session: Session = Depends(get_db)):
+async def change_status(request: Request,
+                        _id: str,
+                        session: Session = Depends(get_db)):
     """Invert blocked status of a user.
-    Only admins allowed, can't block other admins"""
+
+    Only admins allowed, can't block other admins
+    """
     token = get_token(request)
     if not token["role"] == "admin":
         raise HTTPException(status_code=403, detail="Invalid credentials")
@@ -153,9 +162,11 @@ async def change_status(request: Request, _id: str, session: Session = Depends(g
         raise HTTPException(status_code=404, detail="User not found")
 
 
-@app.delete("/users", include_in_schema=False, dependencies=[Depends(JWTBearer())])
-async def delete(request: Request, email: str, session: Session = Depends(get_db)):
-    """Delete users with specified email and password. Only admins allowed"""
+@app.delete("/users", dependencies=[Depends(JWTBearer())])
+async def delete(request: Request,
+                 email: str,
+                 session: Session = Depends(get_db)):
+    """Delete users with specified email and password. Only admins allowed."""
     token = get_token(request)
     if not token["role"] == "admin":
         raise HTTPException(status_code=403, detail="Invalid credentials")
@@ -194,7 +205,8 @@ async def get_all(
     """Retrieve details for all users currently present in the database."""
     with session as open_session:
         if username is None:
-            return paginate(get_all_users(open_session), params=Params(offset=offset, limit=limit))
+            return paginate(get_all_users(open_session),
+                            params=Params(offset=offset, limit=limit))
         db_user = get_user_by_username(open_session, username=username)
     if db_user is None:
         raise HTTPException(status_code=404, detail="User not found")

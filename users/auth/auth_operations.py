@@ -18,5 +18,6 @@ def encode_token(role: str, _id: str):
 
 
 def get_token(request: Request):
+    """Get token from request."""
     token = request.headers.get("Authorization").split(' ')[1]
     return decode_token(token)

@@ -28,14 +28,13 @@ def override_get_db():
         database.close()
 
 
-token = encode_token("admin", "magicword")
-headers = {"Authorization": f"Bearer {token}"}
-# to build and tear down test database and firebase authentication
+TOKEN = encode_token("admin", "magicword")
+headers = {"Authorization": f"Bearer {TOKEN}"}
 
+
+# to build and tear down test database and firebase authentication
 @pytest.fixture
 def test_db():
-    token = encode_token("admin", "magicword")
-    headers = {"Authorization": f"Bearer {token}"}
     Base.metadata.create_all(bind=engine)
     yield
     for email in user_emails:
@@ -147,8 +146,10 @@ def test_user_that_wasnt_stored_isnt_retrieved(test_db):
     user_emails.append(user_2["email"])
     response = client.get("users/", headers=headers)
     assert response.status_code == 200
-    assert (equal_dicts(response.json()["items"][0], user_3, ignored_keys)) is False
-    assert (equal_dicts(response.json()["items"][1], user_3, ignored_keys)) is False
+    user1 = response.json()["items"][0]
+    user2 = response.json()["items"][1]
+    assert (equal_dicts(user1, user_3, ignored_keys)) is False
+    assert (equal_dicts(user2, user_3, ignored_keys)) is False
 
 
 # shouldn't assume an order for results
@@ -234,7 +235,8 @@ def test_can_retrieve_several_users_with_their_usernames(test_db):
         user_string = "users?username=" + create_response.json()["username"]
         get_response = client.get(user_string, headers=headers)
         assert get_response.status_code == 200
-        assert equal_dicts(get_response.json()["items"][0], users[idx], ignored_keys)
+        user = get_response.json()["items"][0]
+        assert equal_dicts(user, users[idx], ignored_keys)
 
 
 def test_when_updating_user_data_expect_data(test_db):
@@ -255,7 +257,8 @@ def test_when_updating_user_data_expect_data(test_db):
     )
     assert response_patch.status_code == 204
     assert response_patch.json() == {}
-    response_get = client.get("users/" + response_post.json()["id"], headers=headers)
+    user = "users/" + response_post.json()["id"]
+    response_get = client.get(user, headers=headers)
     assert response_get.status_code == 200
     assert equal_dicts(
         response_get.json(),
@@ -288,7 +291,8 @@ def test_when_update_user_height_and_weight_expect_height_and_weight(test_db):
     )
     assert response_patch.status_code == 204
     assert response_patch.json() == {}
-    response_get = client.get("users/" + response_post.json()["id"], headers=headers)
+    user = "users/" + response_post.json()["id"]
+    response_get = client.get(user, headers=headers)
     assert response_get.status_code == 200
     assert equal_dicts(
         response_get.json(),
@@ -316,16 +320,18 @@ def test_when_update_user_id_banana_expect_not_found(test_db):
 def test_cant_change_status_without_token(test_db):
     create_response = client.post("users", json=user_2)
     user_emails.append(user_2["email"])
-    patch_response = client.patch("users/status/" + create_response.json()["id"])
+    user = "users/status/" + create_response.json()["id"]
+    patch_response = client.patch(user)
     assert patch_response.status_code == 403
 
 
 def test_cant_change_status_as_user(test_db):
-    token = encode_token("user", "magicword")
-    user_token = {"Authorization": f"Bearer {token}"}
+    _token = encode_token("user", "magicword")
+    user_token = {"Authorization": f"Bearer {_token}"}
     create_response = client.post("users", json=user_2)
     user_emails.append(user_2["email"])
-    patch_response = client.patch("users/status/" + create_response.json()["id"], headers=user_token)
+    url = "users/status/" + create_response.json()["id"]
+    patch_response = client.patch(url, headers=user_token)
     assert patch_response.status_code == 403
 
 
@@ -334,12 +340,13 @@ def test_can_change_status_to_blocked_and_back_again_as_admin(test_db):
     unblocked_user = user_1 | {"is_blocked": False}
     create_response = client.post("users", json=user_1)
     user_emails.append(user_1["email"])
-    patch_response = client.patch("users/status/" + create_response.json()["id"], headers=headers)
-    get_response = client.get("users/" + create_response.json()["id"], headers=headers)
+    patch_url = "users/status/" + create_response.json()["id"]
+    get_url = "users/" + create_response.json()["id"]
+    patch_response = client.patch(patch_url, headers=headers)
+    get_response = client.get(get_url, headers=headers)
     assert patch_response.status_code == 200
     assert equal_dicts(get_response.json(), blocked_user, {"id", "password"})
-    client.patch("users/status/" + create_response.json()["id"], headers=headers)
-    get_response = client.get("users/" + create_response.json()["id"], headers=headers)
+    client.patch(patch_url, headers=headers)
+    get_response = client.get(get_url, headers=headers)
     assert patch_response.status_code == 200
     assert equal_dicts(get_response.json(), unblocked_user, {"id", "password"})
-
