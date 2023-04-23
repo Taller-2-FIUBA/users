@@ -13,9 +13,10 @@ from sqlalchemy.orm import Session
 from environ import to_config
 from prometheus_client import start_http_server, Counter
 from firebase_admin import credentials, auth
+from fastapi_pagination import LimitOffsetPage, add_pagination, paginate, Params
 
 from users.auth.auth_bearer import JWTBearer
-from users.auth.auth_operations import encode_token, decode_token
+from users.auth.auth_operations import encode_token, decode_token, get_token
 from users.config import AppConfig
 from users.database import get_database_url
 from users.crud import (
@@ -24,7 +25,7 @@ from users.crud import (
     get_all_users,
     get_user_by_id,
     get_user_by_username,
-    update_user
+    update_user, change_blocked_status
 )
 from users.schemas import User, UserCreate, UserUpdate
 from users.models import Base
@@ -62,6 +63,8 @@ start_http_server(8002)
 ENGINE = create_engine(get_database_url(CONFIGURATION))
 if "TESTING" not in os.environ:
     Base.metadata.create_all(bind=ENGINE)
+
+add_pagination(app)
 
 
 # Helper methods.
@@ -110,14 +113,17 @@ def create(new_user: UserCreate, session: Session = Depends(get_db)):
     except Exception as signup_exception:
         msg = {'message': 'Error Creating User'}
         raise HTTPException(detail=msg, status_code=400) from signup_exception
-    details = {"id": user.uid} | new_user.dict()
+    details = {"id": user.uid, "is_blocked": False} | new_user.dict()
     with session as open_session:
         return add_user(open_session, User(**details))
 
 
-@app.get("/users/{_id}")
-async def get_one(_id: str, session: Session = Depends(get_db)):
+@app.get("/users/{_id}", dependencies=[Depends(JWTBearer())])
+async def get_one(request: Request, _id: str, session: Session = Depends(get_db)):
     """Retrieve details for users with specified id."""
+    token = get_token(request)
+    if not token["role"] == "admin" and not token["role"] == "user":
+        raise HTTPException(status_code=403, detail="Invalid credentials")
     with session as open_session:
         db_user = get_user_by_id(open_session, user_id=_id)
     if db_user is None:
@@ -128,15 +134,31 @@ async def get_one(_id: str, session: Session = Depends(get_db)):
 @app.post("/validation-test", dependencies=[Depends(JWTBearer())])
 async def test(request: Request):
     """Check if token is valid. Only for demonstration."""
-    token = request.headers.get("Authorization").split(' ')[1]
-    token = decode_token(token)
+    token = get_token(request)
     if not token["role"] == "admin" or not token["id"] == "magicword":
         raise HTTPException(status_code=403, detail="Invalid credentials")
 
 
-@app.delete("/users", include_in_schema=False)
-async def delete(email: str, session: Session = Depends(get_db)):
-    """Delete users with specified email and password."""
+@app.patch("/users/status/{_id}", dependencies=[Depends(JWTBearer())])
+async def change_status(request: Request, _id: str, session: Session = Depends(get_db)):
+    """Invert blocked status of a user.
+    Only admins allowed, can't block other admins"""
+    token = get_token(request)
+    if not token["role"] == "admin":
+        raise HTTPException(status_code=403, detail="Invalid credentials")
+    with session as open_session:
+        db_user = get_user_by_id(open_session, user_id=_id)
+        change_blocked_status(open_session, _id)
+    if db_user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+
+
+@app.delete("/users", include_in_schema=False, dependencies=[Depends(JWTBearer())])
+async def delete(request: Request, email: str, session: Session = Depends(get_db)):
+    """Delete users with specified email and password. Only admins allowed"""
+    token = get_token(request)
+    if not token["role"] == "admin":
+        raise HTTPException(status_code=403, detail="Invalid credentials")
     new_user = auth.get_user_by_email(email)
     with session as open_session:
         db_user = get_user_by_id(open_session, new_user.uid)
@@ -165,16 +187,18 @@ async def patch_user(
 @app.get("/users")
 async def get_all(
     username: Optional[str] = None,
+    offset: Optional[str] = 0,
+    limit: Optional[str] = 10,
     session: Session = Depends(get_db)
-):
+) -> LimitOffsetPage[User]:
     """Retrieve details for all users currently present in the database."""
     with session as open_session:
         if username is None:
-            return get_all_users(open_session)
+            return paginate(get_all_users(open_session), params=Params(offset=offset, limit=limit))
         db_user = get_user_by_username(open_session, username=username)
     if db_user is None:
         raise HTTPException(status_code=404, detail="User not found")
-    return db_user
+    return paginate([db_user], params=Params(offset=0, limit=1))
 
 
 # Admin endpoints. Maybe move to their own module.

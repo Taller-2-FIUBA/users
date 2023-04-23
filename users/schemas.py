@@ -41,6 +41,7 @@ class User(UserBase):
     """User after being created, id + details."""
 
     id: str
+    is_blocked: bool
 
     class Config:
         """Required to enable orm."""
