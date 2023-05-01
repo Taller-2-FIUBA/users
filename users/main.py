@@ -3,6 +3,7 @@ import json
 import os
 from typing import Optional
 import firebase_admin
+import httpx
 import pyrebase
 
 from fastapi import FastAPI, HTTPException, Depends, Request, status
@@ -16,10 +17,9 @@ from firebase_admin import credentials, auth
 from fastapi_pagination import LimitOffsetPage, add_pagination, \
     paginate, Params
 
-from users.auth.auth_bearer import JWTBearer
-from users.auth.auth_operations import encode_token, get_token
 from users.config import AppConfig
 from users.database import get_database_url
+
 from users.crud import (
     create_user,
     delete_user,
@@ -74,6 +74,30 @@ def get_db() -> Session:
     return Session(autocommit=False, autoflush=False, bind=ENGINE)
 
 
+async def get_credentials(req):
+    """Get user details from token in request header."""
+    if "TESTING" in os.environ:
+        if "TEST_ID" not in os.environ or "TEST_ID" not in os.environ:
+            raise HTTPException(status_code=403)
+        testing_token = {
+            "id": os.environ["TEST_ID"],
+            "role": os.environ["TEST_ROLE"],
+        }
+        return testing_token
+    url = "http://localhost:8082/auth/credentials"
+    creds = await httpx.AsyncClient().get(url, headers=req.headers)
+    return creds.json()['data']
+
+
+async def get_token(role, user_id):
+    """Return token with role and user_id passed by parameter."""
+    if "TESTING" in os.environ:
+        return {"data": "test_token"}
+    url = "http://localhost:8082/auth/token?role=" + role + "&id=" + user_id
+    token = await httpx.AsyncClient().get(url)
+    return token.json()["data"]
+
+
 def add_user(session: Session, user: User):
     """Create new user in the database based on id and user details."""
     with session as open_session:
@@ -96,7 +120,7 @@ async def login(request: Request):
         msg = "Error logging in"
         raise HTTPException(detail=msg, status_code=400) from login_exception
     user_id = auth.get_user_by_email(email).uid
-    body = {"token": encode_token("user", user_id), "id": user_id}
+    body = {"token": await get_token("user", user_id), "id": user_id}
     return JSONResponse(content=body, status_code=200)
 
 
@@ -119,14 +143,14 @@ def create(new_user: UserCreate, session: Session = Depends(get_db)):
         return add_user(open_session, User(**details))
 
 
-@app.get("/users/{_id}", dependencies=[Depends(JWTBearer())])
+@app.get("/users/{_id}")
 async def get_one(
     request: Request,
     _id: str,
     session: Session = Depends(get_db)
 ):
     """Retrieve details for users with specified id."""
-    token = get_token(request)
+    token = await get_credentials(request)
     if not token["role"] == "admin" and not token["role"] == "user":
         raise HTTPException(status_code=403, detail="Invalid credentials")
     with session as open_session:
@@ -136,15 +160,7 @@ async def get_one(
     return db_user
 
 
-@app.post("/validation-test", dependencies=[Depends(JWTBearer())])
-async def test(request: Request):
-    """Check if token is valid. Only for demonstration."""
-    token = get_token(request)
-    if not token["role"] == "admin" or not token["id"] == "magicword":
-        raise HTTPException(status_code=403, detail="Invalid credentials")
-
-
-@app.patch("/users/status/{_id}", dependencies=[Depends(JWTBearer())])
+@app.patch("/users/status/{_id}")
 async def change_status(request: Request,
                         _id: str,
                         session: Session = Depends(get_db)):
@@ -152,7 +168,7 @@ async def change_status(request: Request,
 
     Only admins allowed, can't block other admins
     """
-    token = get_token(request)
+    token = await get_credentials(request)
     if not token["role"] == "admin":
         raise HTTPException(status_code=403, detail="Invalid credentials")
     with session as open_session:
@@ -162,12 +178,12 @@ async def change_status(request: Request,
         raise HTTPException(status_code=404, detail="User not found")
 
 
-@app.delete("/users", dependencies=[Depends(JWTBearer())])
+@app.delete("/users")
 async def delete(request: Request,
                  email: str,
                  session: Session = Depends(get_db)):
     """Delete users with specified email and password. Only admins allowed."""
-    token = get_token(request)
+    token = await get_credentials(request)
     if not token["role"] == "admin":
         raise HTTPException(status_code=403, detail="Invalid credentials")
     new_user = auth.get_user_by_email(email)
@@ -181,11 +197,15 @@ async def delete(request: Request,
 
 @app.patch("/users/{_id}")
 async def patch_user(
+    request: Request,
     _id: str,
     user: UserUpdate,
     session: Session = Depends(get_db)
 ):
     """Update user data."""
+    token = await get_credentials(request)
+    if token["role"] == "user" and token["id"] != _id:
+        raise HTTPException(status_code=403, detail="Invalid credentials")
     with session as open_session:
         if get_user_by_id(open_session, user_id=_id) is None:
             raise HTTPException(
@@ -240,8 +260,11 @@ async def add_admin(
 
 
 @app.get("/admins")
-async def get_admins(session: Session = Depends(get_db)):
+async def get_admins(request: Request, session: Session = Depends(get_db)):
     """Return all administrators."""
+    token = await get_credentials(request)
+    if token["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Invalid credentials")
     with session as open_session:
         return get_all_admins(open_session)
 
@@ -258,5 +281,5 @@ async def admin_login(request: Request):
         msg = "Error logging in"
         raise HTTPException(detail=msg, status_code=400) from login_exception
     user_id = auth.get_user_by_email(email).uid
-    body = {"token": encode_token("admin", user_id), "id": user_id}
+    body = {"token": await get_token("admin", user_id), "id": user_id}
     return JSONResponse(content=body, status_code=200)
