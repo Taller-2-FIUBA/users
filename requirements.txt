@@ -5,7 +5,7 @@ pydantic
 uvicorn
 sqlalchemy
 psycopg2-binary
-requests-toolbelt=0.10.1
+requests-toolbelt==0.10.1
 pyrebase4
 firebase-admin
 fastapi-pagination
