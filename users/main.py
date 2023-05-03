@@ -84,7 +84,7 @@ async def get_credentials(req):
             "role": os.environ["TEST_ROLE"],
         }
         return testing_token
-    url = "http://localhost:8082/auth/credentials"
+    url = f"http://{CONFIGURATION.auth.host}/auth/credentials"
     creds = await httpx.AsyncClient().get(url, headers=req.headers)
     return creds.json()['data']
 
@@ -93,7 +93,8 @@ async def get_token(role, user_id):
     """Return token with role and user_id passed by parameter."""
     if "TESTING" in os.environ:
         return {"data": "test_token"}
-    url = "http://localhost:8082/auth/token?role=" + role + "&id=" + user_id
+    url = f"http://{CONFIGURATION.auth.host}/auth/token?role=" + role +\
+        "&id=" + user_id
     token = await httpx.AsyncClient().get(url)
     return token.json()["data"]
 

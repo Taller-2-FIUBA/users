@@ -27,3 +27,63 @@ def test_when_environment_has_prometheus_port_9004_expect_9004():
 def test_when_environment_debug_log_level_expect_debug():
     cnf = to_config(AppConfig)
     assert cnf.log_level == "DEBUG"
+
+
+@patch.dict(environ, {"USERS_DB_DRIVER": "postgresql"}, clear=True)
+def test_when_environment_db_driver_expect_postgresql():
+    cnf = to_config(AppConfig)
+    assert cnf.db.driver == "postgresql"
+
+
+@patch.dict(environ, {"USERS_DB_PASSWORD": "secret"}, clear=True)
+def test_when_environment_db_password_expect_secret():
+    cnf = to_config(AppConfig)
+    assert cnf.db.password == "secret"
+
+
+@patch.dict(environ, {"USERS_DB_USER": "backend"}, clear=True)
+def test_when_environment_db_user_expect_backend():
+    cnf = to_config(AppConfig)
+    assert cnf.db.user == "backend"
+
+
+@patch.dict(environ, {"USERS_DB_HOST": "localhost"}, clear=True)
+def test_when_environment_db_host_expect_localhost():
+    cnf = to_config(AppConfig)
+    assert cnf.db.host == "localhost"
+
+
+@patch.dict(environ, {"USERS_DB_PORT": "5432"}, clear=True)
+def test_when_environment_db_port_expect_5432():
+    cnf = to_config(AppConfig)
+    assert cnf.db.port == 5432
+
+
+@patch.dict(environ, {"USERS_DB_DATABASE": "fiufit"}, clear=True)
+def test_when_environment_db_database_expect_fiufit():
+    cnf = to_config(AppConfig)
+    assert cnf.db.database == "fiufit"
+
+
+@patch.dict(environ, {"USERS_AUTH_HOST": "auth-svc"}, clear=True)
+def test_when_environment_auth_host_expect_auth_svc():
+    cnf = to_config(AppConfig)
+    assert cnf.auth.host == "auth-svc"
+
+
+@patch.dict(environ, {"USERS_TEST_IS_TESTING": "True"}, clear=True)
+def test_when_environment_is_testing_expect_true():
+    cnf = to_config(AppConfig)
+    assert cnf.test.is_testing
+
+
+@patch.dict(environ, {"USERS_TEST_USER_ID": "banana"}, clear=True)
+def test_when_environment_user_id_expect_banana():
+    cnf = to_config(AppConfig)
+    assert cnf.test.user_id == "banana"
+
+
+@patch.dict(environ, {"USERS_TEST_ROLE": "AwesomeRole"}, clear=True)
+def test_when_environment_role_expect_awesome_role():
+    cnf = to_config(AppConfig)
+    assert cnf.test.role == "AwesomeRole"
