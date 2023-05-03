@@ -8,3 +8,4 @@ psycopg2-binary
 pyrebase4
 firebase-admin
 pyJWT
+fastapi-pagination

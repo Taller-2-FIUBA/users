@@ -21,6 +21,7 @@ class Users(Base):
     location = Column(String)
     registration_date = Column(String)
     is_athlete = Column(Boolean)
+    is_blocked = Column(Boolean)
 
 
 class Admin(Base):

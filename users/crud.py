@@ -11,7 +11,7 @@ def create_user(session: Session, user: User):
                     height=user.height, weight=user.weight,
                     birth_date=user.birth_date, location=user.location,
                     registration_date=user.registration_date,
-                    is_athlete=user.is_athlete)
+                    is_athlete=user.is_athlete, is_blocked=user.is_blocked)
     session.add(db_user)
     session.commit()
     session.refresh(db_user)
@@ -36,6 +36,13 @@ def get_all_users(session: Session):
 def delete_user(session: Session, user_id: str):
     """Delete user with certain id from database."""
     session.query(Users).filter(Users.id == user_id).delete()
+    session.commit()
+
+
+def change_blocked_status(session: Session, user_id: str):
+    """Inverts blocked status for user with provided id."""
+    db_user = session.query(Users).filter(Users.id == user_id).first()
+    db_user.is_blocked = not db_user.is_blocked
     session.commit()
 
 

@@ -3,8 +3,9 @@ import json
 import os
 from typing import Optional
 import firebase_admin
+import httpx
 import pyrebase
-import jwt
+
 from fastapi import FastAPI, HTTPException, Depends, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -13,16 +14,19 @@ from sqlalchemy.orm import Session
 from environ import to_config
 from prometheus_client import start_http_server, Counter
 from firebase_admin import credentials, auth
+from fastapi_pagination import LimitOffsetPage, add_pagination, \
+    paginate, Params
 
 from users.config import AppConfig
 from users.database import get_database_url
+
 from users.crud import (
     create_user,
     delete_user,
     get_all_users,
     get_user_by_id,
     get_user_by_username,
-    update_user
+    update_user, change_blocked_status
 )
 from users.schemas import User, UserCreate, UserUpdate
 from users.models import Base
@@ -61,11 +65,37 @@ ENGINE = create_engine(get_database_url(CONFIGURATION))
 if "TESTING" not in os.environ:
     Base.metadata.create_all(bind=ENGINE)
 
+add_pagination(app)
+
 
 # Helper methods.
 def get_db() -> Session:
     """Create a session."""
     return Session(autocommit=False, autoflush=False, bind=ENGINE)
+
+
+async def get_credentials(req):
+    """Get user details from token in request header."""
+    if "TESTING" in os.environ:
+        if "TEST_ID" not in os.environ or "TEST_ID" not in os.environ:
+            raise HTTPException(status_code=403)
+        testing_token = {
+            "id": os.environ["TEST_ID"],
+            "role": os.environ["TEST_ROLE"],
+        }
+        return testing_token
+    url = "http://localhost:8082/auth/credentials"
+    creds = await httpx.AsyncClient().get(url, headers=req.headers)
+    return creds.json()['data']
+
+
+async def get_token(role, user_id):
+    """Return token with role and user_id passed by parameter."""
+    if "TESTING" in os.environ:
+        return {"data": "test_token"}
+    url = "http://localhost:8082/auth/token?role=" + role + "&id=" + user_id
+    token = await httpx.AsyncClient().get(url)
+    return token.json()["data"]
 
 
 def add_user(session: Session, user: User):
@@ -90,9 +120,7 @@ async def login(request: Request):
         msg = "Error logging in"
         raise HTTPException(detail=msg, status_code=400) from login_exception
     user_id = auth.get_user_by_email(email).uid
-    data = {"id": user_id}
-    encoded = jwt.encode(data, "secret", algorithm="HS256")
-    body = {"token": encoded, "id": user_id}
+    body = {"token": await get_token("user", user_id), "id": user_id}
     return JSONResponse(content=body, status_code=200)
 
 
@@ -110,14 +138,21 @@ def create(new_user: UserCreate, session: Session = Depends(get_db)):
     except Exception as signup_exception:
         msg = {'message': 'Error Creating User'}
         raise HTTPException(detail=msg, status_code=400) from signup_exception
-    details = {"id": user.uid} | new_user.dict()
+    details = {"id": user.uid, "is_blocked": False} | new_user.dict()
     with session as open_session:
         return add_user(open_session, User(**details))
 
 
 @app.get("/users/{_id}")
-async def get_one(_id: str, session: Session = Depends(get_db)):
+async def get_one(
+    request: Request,
+    _id: str,
+    session: Session = Depends(get_db)
+):
     """Retrieve details for users with specified id."""
+    token = await get_credentials(request)
+    if not token["role"] == "admin" and not token["role"] == "user":
+        raise HTTPException(status_code=403, detail="Invalid credentials")
     with session as open_session:
         db_user = get_user_by_id(open_session, user_id=_id)
     if db_user is None:
@@ -125,9 +160,32 @@ async def get_one(_id: str, session: Session = Depends(get_db)):
     return db_user
 
 
-@app.delete("/users", include_in_schema=False)
-async def delete(email: str, session: Session = Depends(get_db)):
-    """Delete users with specified email and password."""
+@app.patch("/users/status/{_id}")
+async def change_status(request: Request,
+                        _id: str,
+                        session: Session = Depends(get_db)):
+    """Invert blocked status of a user.
+
+    Only admins allowed, can't block other admins
+    """
+    token = await get_credentials(request)
+    if not token["role"] == "admin":
+        raise HTTPException(status_code=403, detail="Invalid credentials")
+    with session as open_session:
+        db_user = get_user_by_id(open_session, user_id=_id)
+        change_blocked_status(open_session, _id)
+    if db_user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+
+
+@app.delete("/users")
+async def delete(request: Request,
+                 email: str,
+                 session: Session = Depends(get_db)):
+    """Delete users with specified email and password. Only admins allowed."""
+    token = await get_credentials(request)
+    if not token["role"] == "admin":
+        raise HTTPException(status_code=403, detail="Invalid credentials")
     new_user = auth.get_user_by_email(email)
     with session as open_session:
         db_user = get_user_by_id(open_session, new_user.uid)
@@ -139,11 +197,15 @@ async def delete(email: str, session: Session = Depends(get_db)):
 
 @app.patch("/users/{_id}")
 async def patch_user(
+    request: Request,
     _id: str,
     user: UserUpdate,
     session: Session = Depends(get_db)
 ):
     """Update user data."""
+    token = await get_credentials(request)
+    if token["role"] == "user" and token["id"] != _id:
+        raise HTTPException(status_code=403, detail="Invalid credentials")
     with session as open_session:
         if get_user_by_id(open_session, user_id=_id) is None:
             raise HTTPException(
@@ -156,16 +218,19 @@ async def patch_user(
 @app.get("/users")
 async def get_all(
     username: Optional[str] = None,
+    offset: Optional[str] = 0,
+    limit: Optional[str] = 10,
     session: Session = Depends(get_db)
-):
+) -> LimitOffsetPage[User]:
     """Retrieve details for all users currently present in the database."""
     with session as open_session:
         if username is None:
-            return get_all_users(open_session)
+            return paginate(get_all_users(open_session),
+                            params=Params(offset=offset, limit=limit))
         db_user = get_user_by_username(open_session, username=username)
     if db_user is None:
         raise HTTPException(status_code=404, detail="User not found")
-    return db_user
+    return paginate([db_user], params=Params(offset=0, limit=1))
 
 
 # Admin endpoints. Maybe move to their own module.
@@ -195,8 +260,11 @@ async def add_admin(
 
 
 @app.get("/admins")
-async def get_admins(session: Session = Depends(get_db)):
+async def get_admins(request: Request, session: Session = Depends(get_db)):
     """Return all administrators."""
+    token = await get_credentials(request)
+    if token["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Invalid credentials")
     with session as open_session:
         return get_all_admins(open_session)
 
@@ -213,7 +281,5 @@ async def admin_login(request: Request):
         msg = "Error logging in"
         raise HTTPException(detail=msg, status_code=400) from login_exception
     user_id = auth.get_user_by_email(email).uid
-    data = {"role": "admin"}
-    encoded = jwt.encode(data, "secret", algorithm="HS256")
-    body = {"token": encoded, "id": user_id}
+    body = {"token": await get_token("admin", user_id), "id": user_id}
     return JSONResponse(content=body, status_code=200)
