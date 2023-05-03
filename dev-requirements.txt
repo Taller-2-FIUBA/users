@@ -8,4 +8,3 @@ flake8-print
 mypy
 black
 pre-commit
-httpx
