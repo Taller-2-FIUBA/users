@@ -68,24 +68,27 @@ if "TESTING" not in os.environ:
 add_pagination(app)
 
 
-# Helper methods.
+# Helper methods
 def get_db() -> Session:
     """Create a session."""
     return Session(autocommit=False, autoflush=False, bind=ENGINE)
 
 
+# Move to their own module
 async def get_credentials(req):
     """Get user details from token in request header."""
     if "TESTING" in os.environ:
-        if "TEST_ID" not in os.environ or "TEST_ID" not in os.environ:
+        if "TOKEN_ID" not in os.environ or "TOKEN_ROLE" not in os.environ:
             raise HTTPException(status_code=403)
         testing_token = {
-            "id": os.environ["TEST_ID"],
-            "role": os.environ["TEST_ROLE"],
+            "id": os.environ["TOKEN_ID"],
+            "role": os.environ["TOKEN_ROLE"],
         }
         return testing_token
     url = f"http://{CONFIGURATION.auth.host}/auth/credentials"
     creds = await httpx.AsyncClient().get(url, headers=req.headers)
+    if creds.status_code != 200:
+        raise HTTPException(status_code=creds.status_code, detail=creds.json())
     return creds.json()['data']
 
 
@@ -93,10 +96,21 @@ async def get_token(role, user_id):
     """Return token with role and user_id passed by parameter."""
     if "TESTING" in os.environ:
         return {"data": "test_token"}
-    url = f"http://{CONFIGURATION.auth.host}/auth/token?role=" + role +\
-        "&id=" + user_id
+    url = f"http://{CONFIGURATION.auth.host}/auth/token?role=" + role + \
+          "&id=" + user_id
     token = await httpx.AsyncClient().get(url)
     return token.json()["data"]
+
+
+def add_user_firebase(email, password):
+    """Add user to firebase and return uid."""
+    if "TESTING" in os.environ:
+        test_user = {"uid": os.environ["TEST_ID"]}
+        return test_user
+    return auth.create_user(
+        email=email,
+        password=password
+    )
 
 
 def add_user(session: Session, user: User):
@@ -108,6 +122,14 @@ def add_user(session: Session, user: User):
         return create_user(session=open_session, user=user)
 
 
+def login_firebase(email, password):
+    """Login to Firebase with email and password and return user ID."""
+    if "TESTING" in os.environ:
+        return os.environ["TEST_ID"]
+    pb.auth().sign_in_with_email_and_password(email, password)
+    return auth.get_user_by_email(email).uid
+
+
 # Endpoint definition
 @app.post("/users/login")
 async def login(request: Request):
@@ -116,11 +138,10 @@ async def login(request: Request):
     email = req_json['email']
     password = req_json['password']
     try:
-        pb.auth().sign_in_with_email_and_password(email, password)
+        user_id = login_firebase(email, password)
     except Exception as login_exception:
         msg = "Error logging in"
         raise HTTPException(detail=msg, status_code=400) from login_exception
-    user_id = auth.get_user_by_email(email).uid
     body = {"token": await get_token("user", user_id), "id": user_id}
     return JSONResponse(content=body, status_code=200)
 
@@ -132,14 +153,11 @@ def create(new_user: UserCreate, session: Session = Depends(get_db)):
         msg = {'message': 'Error! Missing Email or Password'}
         raise HTTPException(detail=msg, status_code=400)
     try:
-        user = auth.create_user(
-            email=new_user.email,
-            password=new_user.password
-        )
+        user = add_user_firebase(new_user.email, new_user.password)
     except Exception as signup_exception:
         msg = {'message': 'Error Creating User'}
         raise HTTPException(detail=msg, status_code=400) from signup_exception
-    details = {"id": user.uid, "is_blocked": False} | new_user.dict()
+    details = {"id": user["uid"], "is_blocked": False} | new_user.dict()
     with session as open_session:
         return add_user(open_session, User(**details))
 
@@ -248,10 +266,7 @@ async def add_admin(
         msg = {'message': 'Error! Missing Password.'}
         raise HTTPException(detail=msg, status_code=400)
     try:
-        firebase_user = auth.create_user(
-            email=new_admin.email,
-            password=new_admin.password
-        )
+        firebase_user = add_user_firebase(new_admin.email, new_admin.password)
     except Exception as signup_exception:
         msg = {'message': 'Error Creating User'}
         raise HTTPException(detail=msg, status_code=400) from signup_exception
@@ -277,10 +292,9 @@ async def admin_login(request: Request):
     email = req_json['email']
     password = req_json['password']
     try:
-        pb.auth().sign_in_with_email_and_password(email, password)
+        user_id = login_firebase(email, password)
     except Exception as login_exception:
         msg = "Error logging in"
         raise HTTPException(detail=msg, status_code=400) from login_exception
-    user_id = auth.get_user_by_email(email).uid
     body = {"token": await get_token("admin", user_id), "id": user_id}
     return JSONResponse(content=body, status_code=200)

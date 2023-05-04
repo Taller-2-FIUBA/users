@@ -27,9 +27,16 @@ def override_get_db():
         database.close()
 
 
+testing_constants = ["TOKEN_ID", "TOKEN_ROLE", "TEST_ID"]
+
+
 def set_testing_variables(role, _id):
+    os.environ["TOKEN_ID"] = _id
+    os.environ["TOKEN_ROLE"] = role
+
+
+def set_testing_uid(_id):
     os.environ["TEST_ID"] = _id
-    os.environ["TEST_ROLE"] = role
 
 
 # to build and tear down test database and firebase authentication
@@ -37,18 +44,15 @@ def set_testing_variables(role, _id):
 def test_db():
     Base.metadata.create_all(bind=engine)
     yield
-    set_testing_variables("admin", "magicword")
-    for email in user_emails:
-        client.delete("users" + "?email=" + email)
+    for var in testing_constants:
+        if var in os.environ:
+            os.environ.pop(var, None)
     Base.metadata.drop_all(bind=engine)
-    user_emails.clear()
 
 
 app.dependency_overrides[get_db] = override_get_db
 
 client = TestClient(app)
-
-user_emails = []
 
 ignored_keys = {"id", "password", "is_blocked"}
 
@@ -124,18 +128,18 @@ def equal_dicts(dict1, dict2, ignore_keys):
 
 def test_user_stored_correctly(test_db):
     set_testing_variables("admin", "magicword")
+    set_testing_uid("user_id")
     response = client.post("users", json=user_1)
-    user_emails.append(user_1["email"])
     assert response.status_code == 200
     assert equal_dicts(response.json(), user_1, ignored_keys)
 
 
 def test_several_users_stored_correctly(test_db):
     set_testing_variables("admin", "magicword")
+    set_testing_uid("user_1_id")
     response1 = client.post("users", json=user_1)
+    set_testing_uid("user_2_id")
     response2 = client.post("users", json=user_2)
-    user_emails.append(user_1["email"])
-    user_emails.append(user_2["email"])
     assert response1.status_code == 200
     assert response2.status_code == 200
     assert equal_dicts(response1.json(), user_1, ignored_keys)
@@ -144,10 +148,10 @@ def test_several_users_stored_correctly(test_db):
 
 def test_user_that_wasnt_stored_isnt_retrieved(test_db):
     set_testing_variables("admin", "magicword")
+    set_testing_uid("user_1_id")
     client.post("users", json=user_1)
+    set_testing_uid("user_2_id")
     client.post("users", json=user_2)
-    user_emails.append(user_1["email"])
-    user_emails.append(user_2["email"])
     response = client.get("users/")
     assert response.status_code == 200
     user1 = response.json()["items"][0]
@@ -159,12 +163,12 @@ def test_user_that_wasnt_stored_isnt_retrieved(test_db):
 # shouldn't assume an order for results
 def test_can_get_several_user_details(test_db):
     set_testing_variables("admin", "magicword")
+    set_testing_uid("user_1_id")
     client.post("users", json=user_1)
+    set_testing_uid("user_2_id")
     client.post("users", json=user_2)
+    set_testing_uid("user_3_id")
     client.post("users", json=user_3)
-    user_emails.append(user_1["email"])
-    user_emails.append(user_2["email"])
-    user_emails.append(user_3["email"])
     response = client.get("users/")
     assert equal_dicts(response.json()["items"][0], user_1, ignored_keys)
     assert equal_dicts(response.json()["items"][1], user_2, ignored_keys)
@@ -173,8 +177,8 @@ def test_can_get_several_user_details(test_db):
 
 def test_can_retrieve_user_with_his_id(test_db):
     set_testing_variables("admin", "magicword")
+    set_testing_uid("user_1_id")
     response1 = client.post("users", json=user_1)
-    user_emails.append(user_1["email"])
     response2 = client.get("users/" + response1.json()["id"])
     assert response2.status_code == 200
     assert equal_dicts(response2.json(), user_1, ignored_keys)
@@ -183,7 +187,6 @@ def test_can_retrieve_user_with_his_id(test_db):
 def test_cannot_retrieve_user_with_wrong_id(test_db):
     set_testing_variables("admin", "magicword")
     client.post("users", json=user_1)
-    user_emails.append(user_1["email"])
     response = client.get("users/" + "fake_id")
     assert response.status_code == 404
     assert response.json() == {"detail": "User not found"}
@@ -191,8 +194,8 @@ def test_cannot_retrieve_user_with_wrong_id(test_db):
 
 def test_existing_user_logs_in_correctly(test_db):
     set_testing_variables("admin", "magicword")
+    set_testing_uid("user_2_id")
     client.post("users", json=user_2)
-    user_emails.append(user_2["email"])
     request = {"email": user_2["email"], "password": user_2["password"]}
     response = client.post("users/login", json=request)
     assert response.status_code == 200
@@ -200,8 +203,9 @@ def test_existing_user_logs_in_correctly(test_db):
 
 def test_non_existing_user_raises_exception_at_login(test_db):
     set_testing_variables("admin", "magicword")
+    set_testing_uid("user_2_id")
     client.post("users", json=user_2)
-    user_emails.append(user_2["email"])
+    os.environ.pop("TEST_ID", None)
     request = {"email": user_1["email"], "password": user_1["password"]}
     response = client.post("users/login", json=request)
     assert response.status_code == 400
@@ -210,8 +214,8 @@ def test_non_existing_user_raises_exception_at_login(test_db):
 
 def test_can_retrieve_user_with_his_username(test_db):
     set_testing_variables("admin", "magicword")
+    set_testing_uid("user_1_id")
     create_response = client.post("users", json=user_2)
-    user_emails.append(user_2["email"])
     user_string = "users?username=" + create_response.json()["username"]
     get_response = client.get(user_string)
     assert get_response.status_code == 200
@@ -221,7 +225,6 @@ def test_can_retrieve_user_with_his_username(test_db):
 def test_cannot_retrieve_user_with_incorrect_username(test_db):
     set_testing_variables("admin", "magicword")
     client.post("users", json=user_2)
-    user_emails.append(user_2["email"])
     user_string = "users?username=" + "wrong_username"
     get_response = client.get(user_string)
     assert get_response.status_code == 404
@@ -231,8 +234,8 @@ def test_can_retrieve_several_users_with_their_usernames(test_db):
     set_testing_variables("admin", "magicword")
     users = [user_1, user_2, user_3]
     for idx in range(3):
+        set_testing_uid("user" + str(idx) + "_id")
         create_response = client.post("users", json=users[idx])
-        user_emails.append(users[idx]["email"])
         user_string = "users?username=" + create_response.json()["username"]
         get_response = client.get(user_string)
         assert get_response.status_code == 200
@@ -242,8 +245,8 @@ def test_can_retrieve_several_users_with_their_usernames(test_db):
 
 def test_when_updating_user_data_expect_data(test_db):
     set_testing_variables("admin", "magicword")
+    set_testing_uid("user_id")
     response_post = client.post("users", json=user_to_update)
-    user_emails.append(user_to_update["email"])
     assert response_post.status_code == 200
     response_patch = client.patch(
         "users/" + response_post.json()["id"],
@@ -282,8 +285,8 @@ def test_when_updating_user_data_expect_data(test_db):
 
 def test_when_update_user_height_and_weight_expect_height_and_weight(test_db):
     set_testing_variables("admin", "magicword")
+    set_testing_uid("user_id")
     response_post = client.post("users", json=user_to_update)
-    user_emails.append(user_to_update["email"])
     assert response_post.status_code == 200
     response_patch = client.patch(
         "users/" + response_post.json()["id"],
@@ -322,10 +325,8 @@ def test_when_update_user_id_banana_expect_not_found(test_db):
 
 
 def test_cant_change_status_without_token(test_db):
-    os.environ.pop('TEST_ID', None)
-    os.environ.pop('TEST_ROLE', None)
+    set_testing_uid("user_id")
     create_response = client.post("users", json=user_2)
-    user_emails.append(user_2["email"])
     user = "users/status/" + create_response.json()["id"]
     patch_response = client.patch(user)
     assert patch_response.status_code == 403
@@ -333,9 +334,9 @@ def test_cant_change_status_without_token(test_db):
 
 def test_cant_change_status_as_user(test_db):
     set_testing_variables("user", "magicword")
+    set_testing_uid("user_1_id")
     create_response = client.post("users", json=user_2)
     assert create_response.status_code == 200
-    user_emails.append(user_2["email"])
     url = "users/status/" + create_response.json()["id"]
     patch_response = client.patch(url)
     assert patch_response.status_code == 403
@@ -345,8 +346,8 @@ def test_can_change_status_to_blocked_and_back_again_as_admin(test_db):
     set_testing_variables("admin", "magicword")
     blocked_user = user_1 | {"is_blocked": True}
     unblocked_user = user_1 | {"is_blocked": False}
+    set_testing_uid("user_1_id")
     create_response = client.post("users", json=user_1)
-    user_emails.append(user_1["email"])
     patch_url = "users/status/" + create_response.json()["id"]
     get_url = "users/" + create_response.json()["id"]
     patch_response = client.patch(patch_url)
