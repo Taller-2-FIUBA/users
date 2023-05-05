@@ -20,7 +20,7 @@ spec:
     spec:
       containers:
       - name: users
-        image: marianocinalli/users:v0.0.6
+        image: marianocinalli/users:v0.0.7
         imagePullPolicy: Always
         envFrom:
         - configMapRef:

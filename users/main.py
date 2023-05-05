@@ -89,7 +89,11 @@ async def get_credentials(req):
     creds = await httpx.AsyncClient().get(url, headers=req.headers)
     if creds.status_code != 200:
         raise HTTPException(status_code=creds.status_code, detail=creds.json())
-    return creds.json()['data']
+    try:
+        return creds.json()['data']
+    except Exception as json_exception:
+        msg = "Token format error"
+        raise HTTPException(status_code=403, detail=msg) from json_exception
 
 
 async def get_token(role, user_id):
@@ -105,12 +109,16 @@ async def get_token(role, user_id):
 def add_user_firebase(email, password):
     """Add user to firebase and return uid."""
     if "TESTING" in os.environ:
-        test_user = {"uid": os.environ["TEST_ID"]}
-        return test_user
-    return auth.create_user(
-        email=email,
-        password=password
-    )
+        return os.environ["TEST_ID"]
+    try:
+        user = auth.create_user(
+            email=email,
+            password=password
+        )
+        return user.uid
+    except Exception as signup_exception:
+        msg = {'message': 'Error Creating User'}
+        raise HTTPException(detail=msg, status_code=400) from signup_exception
 
 
 def add_user(session: Session, user: User):
@@ -152,12 +160,8 @@ def create(new_user: UserCreate, session: Session = Depends(get_db)):
     if new_user.email is None or new_user.password is None:
         msg = {'message': 'Error! Missing Email or Password'}
         raise HTTPException(detail=msg, status_code=400)
-    try:
-        user = add_user_firebase(new_user.email, new_user.password)
-    except Exception as signup_exception:
-        msg = {'message': 'Error Creating User'}
-        raise HTTPException(detail=msg, status_code=400) from signup_exception
-    details = {"id": user["uid"], "is_blocked": False} | new_user.dict()
+    uid = add_user_firebase(new_user.email, new_user.password)
+    details = {"id": uid, "is_blocked": False} | new_user.dict()
     with session as open_session:
         return add_user(open_session, User(**details))
 
