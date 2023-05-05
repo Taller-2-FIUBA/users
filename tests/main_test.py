@@ -127,7 +127,7 @@ def equal_dicts(dict1, dict2, ignore_keys):
 
 
 def test_user_stored_correctly(test_db):
-    set_testing_variables("admin", "magicword")
+    set_testing_variables("user_id", "magicword")
     set_testing_uid("user_id")
     response = client.post("users", json=user_1)
     assert response.status_code == 200
@@ -135,7 +135,7 @@ def test_user_stored_correctly(test_db):
 
 
 def test_several_users_stored_correctly(test_db):
-    set_testing_variables("admin", "magicword")
+    set_testing_variables("user_1_id", "magicword")
     set_testing_uid("user_1_id")
     response1 = client.post("users", json=user_1)
     set_testing_uid("user_2_id")
@@ -186,6 +186,7 @@ def test_can_retrieve_user_with_his_id(test_db):
 
 def test_cannot_retrieve_user_with_wrong_id(test_db):
     set_testing_variables("admin", "magicword")
+    set_testing_uid("user_1_id")
     client.post("users", json=user_1)
     response = client.get("users/" + "fake_id")
     assert response.status_code == 404
@@ -223,7 +224,8 @@ def test_can_retrieve_user_with_his_username(test_db):
 
 
 def test_cannot_retrieve_user_with_incorrect_username(test_db):
-    set_testing_variables("admin", "magicword")
+    set_testing_variables("admin", "user_2_id")
+    set_testing_uid("user_2_id")
     client.post("users", json=user_2)
     user_string = "users?username=" + "wrong_username"
     get_response = client.get(user_string)
