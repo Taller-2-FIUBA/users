@@ -238,11 +238,11 @@ async def patch_user(
     return JSONResponse({}, status_code=status.HTTP_204_NO_CONTENT)
 
 
-@app.get("/users")
+@app.get("/users", response_model=LimitOffsetPage[User])
 async def get_all(
     username: Optional[str] = None,
-    offset: Optional[str] = 0,
-    limit: Optional[str] = 10,
+    offset: Optional[int] = 0,
+    limit: Optional[int] = 10,
     session: Session = Depends(get_db)
 ) -> LimitOffsetPage[User]:
     """Retrieve details for all users currently present in the database."""
@@ -269,12 +269,8 @@ async def add_admin(
     if new_admin.password is None:
         msg = {'message': 'Error! Missing Password.'}
         raise HTTPException(detail=msg, status_code=400)
-    try:
-        firebase_user = add_user_firebase(new_admin.email, new_admin.password)
-    except Exception as signup_exception:
-        msg = {'message': 'Error Creating User'}
-        raise HTTPException(detail=msg, status_code=400) from signup_exception
-    fields_and_values = {"id": firebase_user.uid} | new_admin.dict()
+    uid = add_user_firebase(new_admin.email, new_admin.password)
+    fields_and_values = {"id": uid} | new_admin.dict()
     with session as open_session:
         return create_admin(open_session, AdminDTO(**fields_and_values))
 
