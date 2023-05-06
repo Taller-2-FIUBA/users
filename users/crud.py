@@ -33,12 +33,6 @@ def get_all_users(session: Session):
     return session.query(Users).all()
 
 
-def delete_user(session: Session, user_id: str):
-    """Delete user with certain id from database."""
-    session.query(Users).filter(Users.id == user_id).delete()
-    session.commit()
-
-
 def change_blocked_status(session: Session, user_id: str):
     """Inverts blocked status for user with provided id."""
     db_user = session.query(Users).filter(Users.id == user_id).first()
