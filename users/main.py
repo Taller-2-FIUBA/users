@@ -142,7 +142,7 @@ async def token_login_firebase(request: Request, role: str):
                             detail=res.json()["Message"])
     if res.status_code == 200:
         return res.json()
-    return regular_login_firebase(body, role)
+    return await regular_login_firebase(body, role)
 
 
 async def regular_login_firebase(body, role):
