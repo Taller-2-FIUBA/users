@@ -66,7 +66,7 @@ def test_database_empty_at_start(test_db):
 user_1 = {
     "password": "jorgito_pw",
     "username": "jorgitogroso",
-    "email": "jorgditodd@asddbcdd.com",
+    "email": "jorgitodd@asddbcdd.com",
     "name": "Jorge",
     "surname": "Perales",
     "height": 1.9,
@@ -135,9 +135,10 @@ def test_user_stored_correctly(test_db):
 
 
 def test_several_users_stored_correctly(test_db):
-    set_testing_variables("user_1_id", "magicword")
+    set_testing_variables("admin", "user_1_id")
     set_testing_uid("user_1_id")
     response1 = client.post("users", json=user_1)
+    set_testing_variables("admin", "user_2_id")
     set_testing_uid("user_2_id")
     response2 = client.post("users", json=user_2)
     assert response1.status_code == 200
@@ -147,9 +148,10 @@ def test_several_users_stored_correctly(test_db):
 
 
 def test_user_that_wasnt_stored_isnt_retrieved(test_db):
-    set_testing_variables("admin", "magicword")
+    set_testing_variables("admin", "user_1_id")
     set_testing_uid("user_1_id")
     client.post("users", json=user_1)
+    set_testing_variables("admin", "user_2_id")
     set_testing_uid("user_2_id")
     client.post("users", json=user_2)
     response = client.get("users/")
@@ -162,11 +164,13 @@ def test_user_that_wasnt_stored_isnt_retrieved(test_db):
 
 # shouldn't assume an order for results
 def test_can_get_several_user_details(test_db):
-    set_testing_variables("admin", "magicword")
+    set_testing_variables("admin", "user_1_id")
     set_testing_uid("user_1_id")
     client.post("users", json=user_1)
+    set_testing_variables("admin", "user_2_id")
     set_testing_uid("user_2_id")
     client.post("users", json=user_2)
+    set_testing_variables("admin", "user_3_id")
     set_testing_uid("user_3_id")
     client.post("users", json=user_3)
     response = client.get("users/")
@@ -194,7 +198,7 @@ def test_cannot_retrieve_user_with_wrong_id(test_db):
 
 
 def test_existing_user_logs_in_correctly(test_db):
-    set_testing_variables("admin", "magicword")
+    set_testing_variables("admin", "user_2_id")
     set_testing_uid("user_2_id")
     client.post("users", json=user_2)
     request = {"email": user_2["email"], "password": user_2["password"]}
@@ -203,10 +207,9 @@ def test_existing_user_logs_in_correctly(test_db):
 
 
 def test_non_existing_user_raises_exception_at_login(test_db):
-    set_testing_variables("admin", "magicword")
-    set_testing_uid("user_2_id")
+    set_testing_variables("admin", "user_2_id")
+    set_testing_uid("user_1_id")
     client.post("users", json=user_2)
-    os.environ.pop("TEST_ID", None)
     request = {"email": user_1["email"], "password": user_1["password"]}
     response = client.post("users/login", json=request)
     assert response.status_code == 400

@@ -1,10 +1,7 @@
 """Define all endpoints here."""
-import json
 import os
 from typing import Optional
-import firebase_admin
 import httpx
-import pyrebase
 
 from fastapi import FastAPI, HTTPException, Depends, Request, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -13,7 +10,6 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 from environ import to_config
 from prometheus_client import start_http_server, Counter
-from firebase_admin import credentials, auth
 from fastapi_pagination import LimitOffsetPage, add_pagination, \
     paginate, Params
 
@@ -22,7 +18,6 @@ from users.database import get_database_url
 
 from users.crud import (
     create_user,
-    delete_user,
     get_all_users,
     get_user_by_id,
     get_user_by_username,
@@ -32,11 +27,6 @@ from users.schemas import User, UserCreate, UserUpdate
 from users.models import Base
 from users.admin.dao import create_admin, get_all as get_all_admins
 from users.admin.dto import AdminCreationDTO, AdminDTO
-
-cred = credentials.Certificate("users/fiufit-backend-keys.json")
-firebase = firebase_admin.initialize_app(cred)
-with open("firebase_config.json", "r", encoding="utf8") as firebase_config:
-    pb = pyrebase.initialize_app(json.load(firebase_config))
 
 app = FastAPI()
 
@@ -58,7 +48,7 @@ REQUEST_COUNTER = Counter(
 start_http_server(8002)
 
 # Database initialization.
-# Maybe move this so it is only run when required? Now it runs when ever
+# Maybe move this, so it is only run when required? Now it runs when ever
 # the application is started, and we may not need to create the database
 # structure.
 ENGINE = create_engine(get_database_url(CONFIGURATION))
@@ -98,27 +88,25 @@ async def get_credentials(req):
 
 async def get_token(role, user_id):
     """Return token with role and user_id passed by parameter."""
-    if "TESTING" in os.environ:
-        return {"data": "test_token"}
-    url = f"http://{CONFIGURATION.auth.host}/auth/token?role=" + role + \
-          "&id=" + user_id
+    url = f"http://{CONFIGURATION.auth.host}/auth/token?role=" + \
+          role + "&id=" + user_id
     token = await httpx.AsyncClient().get(url)
     return token.json()["data"]
 
 
-def add_user_firebase(email, password):
+async def add_user_firebase(email, password):
     """Add user to firebase and return uid."""
     if "TESTING" in os.environ:
         return os.environ["TEST_ID"]
-    try:
-        user = auth.create_user(
-            email=email,
-            password=password
-        )
-        return user.uid
-    except Exception as signup_exception:
-        msg = {'message': 'Error Creating User'}
-        raise HTTPException(detail=msg, status_code=400) from signup_exception
+    body = {
+        "email": email,
+        "password": password
+    }
+    url = f"http://{CONFIGURATION.auth.host}/auth"
+    res = await httpx.AsyncClient().post(url, json=body)
+    if res.status_code != 200:
+        raise HTTPException(status_code=res.status_code, detail=res.json())
+    return res.json()["id"]
 
 
 def add_user(session: Session, user: User):
@@ -130,37 +118,63 @@ def add_user(session: Session, user: User):
         return create_user(session=open_session, user=user)
 
 
-def login_firebase(email, password):
-    """Login to Firebase with email and password and return user ID."""
+async def token_login_firebase(request: Request, role: str):
+    """Log in with token in request header."""
+    req = await request.json()
     if "TESTING" in os.environ:
-        return os.environ["TEST_ID"]
-    pb.auth().sign_in_with_email_and_password(email, password)
-    return auth.get_user_by_email(email).uid
+        if os.environ["TOKEN_ID"] != os.environ["TEST_ID"]:
+            raise HTTPException(status_code=400, detail="Error logging in")
+        return {
+            "token": "test_token",
+            "id": os.environ["TOKEN_ID"]
+        }
+    url = f"http://{CONFIGURATION.auth.host}/auth/tokenLogin"
+    email = req['email']
+    password = req['password']
+    body = {
+        "email": email,
+        "password": password
+    }
+    res = await httpx.AsyncClient().post(url, json=body,
+                                         headers=request.headers)
+    if res.status_code == 401:
+        raise HTTPException(status_code=res.status_code,
+                            detail=res.json()["Message"])
+    if res.status_code == 200:
+        return res.json()
+    return regular_login_firebase(body, role)
+
+
+async def regular_login_firebase(body, role):
+    """Log in with provided body and return token with proper role."""
+    url = f"http://{CONFIGURATION.auth.host}/auth/login"
+    res = await httpx.AsyncClient().post(url, json=body)
+    if res.status_code != 200:
+        raise HTTPException(status_code=res.status_code,
+                            detail=res.json()["Message"])
+    try:
+        user_id = res.json()["id"]
+        return {"token": await get_token(role, user_id), "id": user_id}
+    except Exception as json_exception:
+        msg = "Login error"
+        raise HTTPException(status_code=400, detail=msg) from json_exception
 
 
 # Endpoint definition
 @app.post("/users/login")
 async def login(request: Request):
     """Log in to Firebase with email, password. Return token if successful."""
-    req_json = await request.json()
-    email = req_json['email']
-    password = req_json['password']
-    try:
-        user_id = login_firebase(email, password)
-    except Exception as login_exception:
-        msg = "Error logging in"
-        raise HTTPException(detail=msg, status_code=400) from login_exception
-    body = {"token": await get_token("user", user_id), "id": user_id}
+    body = await token_login_firebase(request, "user")
     return JSONResponse(content=body, status_code=200)
 
 
 @app.post("/users")
-def create(new_user: UserCreate, session: Session = Depends(get_db)):
+async def create(new_user: UserCreate, session: Session = Depends(get_db)):
     """Create new user in Firebase, add it to the database if successful."""
     if new_user.email is None or new_user.password is None:
         msg = {'message': 'Error! Missing Email or Password'}
         raise HTTPException(detail=msg, status_code=400)
-    uid = add_user_firebase(new_user.email, new_user.password)
+    uid = await add_user_firebase(new_user.email, new_user.password)
     details = {"id": uid, "is_blocked": False} | new_user.dict()
     with session as open_session:
         return add_user(open_session, User(**details))
@@ -199,23 +213,6 @@ async def change_status(request: Request,
         change_blocked_status(open_session, _id)
     if db_user is None:
         raise HTTPException(status_code=404, detail="User not found")
-
-
-@app.delete("/users")
-async def delete(request: Request,
-                 email: str,
-                 session: Session = Depends(get_db)):
-    """Delete users with specified email and password. Only admins allowed."""
-    token = await get_credentials(request)
-    if not token["role"] == "admin":
-        raise HTTPException(status_code=403, detail="Invalid credentials")
-    new_user = auth.get_user_by_email(email)
-    with session as open_session:
-        db_user = get_user_by_id(open_session, new_user.uid)
-        if db_user is None:
-            return
-        auth.delete_user(new_user.uid)
-        delete_user(open_session, user_id=new_user.uid)
 
 
 @app.patch("/users/{_id}")
@@ -288,13 +285,5 @@ async def get_admins(request: Request, session: Session = Depends(get_db)):
 @app.post("/admins/login")
 async def admin_login(request: Request):
     """Login as administrator. Return token if successful."""
-    req_json = await request.json()
-    email = req_json['email']
-    password = req_json['password']
-    try:
-        user_id = login_firebase(email, password)
-    except Exception as login_exception:
-        msg = "Error logging in"
-        raise HTTPException(detail=msg, status_code=400) from login_exception
-    body = {"token": await get_token("admin", user_id), "id": user_id}
+    body = await token_login_firebase(request, "admin")
     return JSONResponse(content=body, status_code=200)
