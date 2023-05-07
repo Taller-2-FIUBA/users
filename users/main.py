@@ -58,7 +58,7 @@ if "TESTING" not in os.environ:
 add_pagination(app)
 
 
-# Helper methods
+# Helper methods, move somewhere else
 def get_db() -> Session:
     """Create a session."""
     return Session(autocommit=False, autoflush=False, bind=ENGINE)
@@ -89,7 +89,7 @@ async def get_credentials(request):
         creds = await httpx.AsyncClient().get(url, headers=auth_header)
         if creds.status_code != 200:
             raise HTTPException(status_code=creds.status_code,
-                                detail=creds.json())
+                                detail=creds.json()["Message"])
         try:
             return creds.json()['data']
         except Exception as json_exception:
@@ -241,7 +241,7 @@ async def patch_user(
                 status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
             )
         update_user(session, _id, user)
-    return JSONResponse(content={}, status_code=204)
+    return JSONResponse(content={}, status_code=200)
 
 
 @app.get("/users", response_model=LimitOffsetPage[User])
