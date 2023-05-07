@@ -65,11 +65,11 @@ def get_db() -> Session:
 
 
 def get_auth_header(request):
+    """Check existence auth header, return it or None if it doesn't exist."""
     auth_header = request.headers.get("Authorization")
     if auth_header is None:
         return None
-    else:
-        return {"Authorization": auth_header}
+    return {"Authorization": auth_header}
 
 
 # Move to their own module
@@ -88,12 +88,14 @@ async def get_credentials(request):
     if auth_header is not None:
         creds = await httpx.AsyncClient().get(url, headers=auth_header)
         if creds.status_code != 200:
-            raise HTTPException(status_code=creds.status_code, detail=creds.json())
+            raise HTTPException(status_code=creds.status_code,
+                                detail=creds.json())
         try:
             return creds.json()['data']
         except Exception as json_exception:
             msg = "Token format error"
-            raise HTTPException(status_code=403, detail=msg) from json_exception
+            raise HTTPException(status_code=403,
+                                detail=msg) from json_exception
     else:
         raise HTTPException(status_code=403, detail="No token")
 
@@ -148,8 +150,7 @@ async def token_login_firebase(request: Request, role: str):
         if res.status_code != 200:
             raise HTTPException(status_code=res.status_code,
                                 detail=res.json()["Message"])
-        else:
-            return res.json()
+        return res.json()
     return await regular_login_firebase(req, role)
 
 
