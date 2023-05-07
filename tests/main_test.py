@@ -265,7 +265,7 @@ def test_when_updating_user_data_expect_data(test_db):
             "location": "Place, AnotherPlace",
         }
     )
-    assert response_patch.status_code == 204
+    assert response_patch.status_code == 200
     assert response_patch.json() == {}
     user = "users/" + response_post.json()["id"]
     response_get = client.get(user)
@@ -300,7 +300,7 @@ def test_when_update_user_height_and_weight_expect_height_and_weight(test_db):
             "weight": 100,
         }
     )
-    assert response_patch.status_code == 204
+    assert response_patch.status_code == 200
     assert response_patch.json() == {}
     user = "users/" + response_post.json()["id"]
     response_get = client.get(user)
