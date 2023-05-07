@@ -64,8 +64,16 @@ def get_db() -> Session:
     return Session(autocommit=False, autoflush=False, bind=ENGINE)
 
 
+def get_auth_header(request):
+    auth_header = request.headers.get("Authorization")
+    if auth_header is None:
+        return None
+    else:
+        return {"Authorization": auth_header}
+
+
 # Move to their own module
-async def get_credentials(req):
+async def get_credentials(request):
     """Get user details from token in request header."""
     if "TESTING" in os.environ:
         if "TOKEN_ID" not in os.environ or "TOKEN_ROLE" not in os.environ:
@@ -76,14 +84,18 @@ async def get_credentials(req):
         }
         return testing_token
     url = f"http://{CONFIGURATION.auth.host}/auth/credentials"
-    creds = await httpx.AsyncClient().get(url, headers=req.headers)
-    if creds.status_code != 200:
-        raise HTTPException(status_code=creds.status_code, detail=creds.json())
-    try:
-        return creds.json()['data']
-    except Exception as json_exception:
-        msg = "Token format error"
-        raise HTTPException(status_code=403, detail=msg) from json_exception
+    auth_header = get_auth_header(request)
+    if auth_header is not None:
+        creds = await httpx.AsyncClient().get(url, headers=auth_header)
+        if creds.status_code != 200:
+            raise HTTPException(status_code=creds.status_code, detail=creds.json())
+        try:
+            return creds.json()['data']
+        except Exception as json_exception:
+            msg = "Token format error"
+            raise HTTPException(status_code=403, detail=msg) from json_exception
+    else:
+        raise HTTPException(status_code=403, detail="No token")
 
 
 async def get_token(role, user_id):
@@ -129,20 +141,16 @@ async def token_login_firebase(request: Request, role: str):
             "id": os.environ["TOKEN_ID"]
         }
     url = f"http://{CONFIGURATION.auth.host}/auth/tokenLogin"
-    email = req['email']
-    password = req['password']
-    body = {
-        "email": email,
-        "password": password
-    }
-    res = await httpx.AsyncClient().post(url, json=body,
-                                         headers=request.headers)
-    if res.status_code == 401:
-        raise HTTPException(status_code=res.status_code,
-                            detail=res.json()["Message"])
-    if res.status_code == 200:
-        return res.json()
-    return await regular_login_firebase(body, role)
+    auth_header = get_auth_header(request)
+    if auth_header is not None:
+        res = await httpx.AsyncClient().post(url, json=req,
+                                             headers=auth_header)
+        if res.status_code != 200:
+            raise HTTPException(status_code=res.status_code,
+                                detail=res.json()["Message"])
+        else:
+            return res.json()
+    return await regular_login_firebase(req, role)
 
 
 async def regular_login_firebase(body, role):
@@ -232,7 +240,7 @@ async def patch_user(
                 status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
             )
         update_user(session, _id, user)
-    return JSONResponse({}, status_code=status.HTTP_204_NO_CONTENT)
+    return JSONResponse(content={}, status_code=204)
 
 
 @app.get("/users", response_model=LimitOffsetPage[User])
