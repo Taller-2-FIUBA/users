@@ -10,8 +10,6 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 from environ import to_config
 from prometheus_client import start_http_server, Counter
-from fastapi_pagination import LimitOffsetPage, add_pagination, \
-    paginate, Params
 
 from users.config import AppConfig
 from users.database import get_database_url
@@ -21,7 +19,7 @@ from users.crud import (
     get_all_users,
     get_user_by_id,
     get_user_by_username,
-    update_user, change_blocked_status
+    update_user, change_blocked_status, get_details_with_id
 )
 from users.schemas import User, UserCreate, UserUpdate
 from users.models import Base
@@ -45,7 +43,7 @@ CONFIGURATION = to_config(AppConfig)
 REQUEST_COUNTER = Counter(
     "my_failures", "Description of counter", ["endpoint", "http_verb"]
 )
-start_http_server(8002)
+start_http_server(8001)
 
 # Database initialization.
 # Maybe move this, so it is only run when required? Now it runs when ever
@@ -54,8 +52,6 @@ start_http_server(8002)
 ENGINE = create_engine(get_database_url(CONFIGURATION))
 if "TESTING" not in os.environ:
     Base.metadata.create_all(bind=ENGINE)
-
-add_pagination(app)
 
 
 # Helper methods, move somewhere else
@@ -244,22 +240,45 @@ async def patch_user(
     return JSONResponse(content={}, status_code=200)
 
 
-@app.get("/users", response_model=LimitOffsetPage[User])
+@app.get("/users")
 async def get_all(
     username: Optional[str] = None,
     offset: Optional[int] = 0,
     limit: Optional[int] = 10,
     session: Session = Depends(get_db)
-) -> LimitOffsetPage[User]:
+):
     """Retrieve details for all users currently present in the database."""
     with session as open_session:
         if username is None:
-            return paginate(get_all_users(open_session),
-                            params=Params(offset=offset, limit=limit))
+            return get_all_users(open_session, limit=limit, offset=offset)
         db_user = get_user_by_username(open_session, username=username)
     if db_user is None:
         raise HTTPException(status_code=404, detail="User not found")
-    return paginate([db_user], params=Params(offset=0, limit=1))
+    return db_user
+
+
+@app.post("/users/recovery/{user_id}")
+async def password_recovery(request: Request,
+                            user_id: str, session: Session = Depends(get_db)):
+    """Request auth service to start password recovery for user_id."""
+    auth_header = get_auth_header(request)
+    if auth_header is None:
+        raise HTTPException(status_code=403, detail="No token")
+    token = await get_credentials(request)
+    if token["id"] != user_id:
+        raise HTTPException(status_code=403, detail="Invalid credentials")
+    with session as open_session:
+        db_user = get_user_by_id(open_session, user_id=user_id)
+        if db_user is None:
+            raise HTTPException(status_code=404, detail="User not found")
+        email, username = get_details_with_id(open_session, user_id)
+    url = f"http://{CONFIGURATION.auth.host}/auth/recovery?email=" + email \
+          + "&username=" + username
+    res = await httpx.AsyncClient().post(url, headers=auth_header)
+    if res.status_code != 200:
+        raise HTTPException(status_code=res.status_code,
+                            detail=res.json()["Message"])
+    return JSONResponse(content={}, status_code=200)
 
 
 # Admin endpoints. Maybe move to their own module.

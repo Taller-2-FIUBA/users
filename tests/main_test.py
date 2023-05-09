@@ -6,6 +6,8 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
+from tests.testing_constants import user_1, user_2, user_3, \
+    user_to_update, user_template_no_email
 from users.main import app, get_db
 from users.models import Base
 
@@ -61,63 +63,6 @@ def test_database_empty_at_start(test_db):
     response = client.get("users")
     assert response.status_code == 200
     assert response.json()["items"] == []
-
-
-user_1 = {
-    "password": "jorgito_pw",
-    "username": "jorgitogroso",
-    "email": "jorgitodd@asddbcdd.com",
-    "name": "Jorge",
-    "surname": "Perales",
-    "height": 1.9,
-    "weight": 100,
-    "birth_date": "23-4-1990",
-    "location": "Buenos Aires, Argentina",
-    "registration_date": "23-4-2023",
-    "is_athlete": True
-}
-
-user_2 = {
-    "password": "pepito_pw",
-    "username": "pepitobasura",
-    "email": "pepitod@abcd.com",
-    "name": "Pepo",
-    "surname": "Gutierrez",
-    "height": 1.8,
-    "weight": 60,
-    "birth_date": "23-4-1987",
-    "location": "Rosario, Santa Fe",
-    "registration_date": "23-3-2023",
-    "is_athlete": False
-}
-
-user_3 = {
-    "password": "anita_pw",
-    "username": "anitazoomer",
-    "email": "anita@abcd.com",
-    "name": "Ana",
-    "surname": "Rodriguez",
-    "height": 1.3,
-    "weight": 80,
-    "birth_date": "23-4-1999",
-    "location": "Cordoba, Cordoba",
-    "registration_date": "23-3-2022",
-    "is_athlete": True
-}
-
-user_to_update = {
-    "password": "pass22word1",
-    "username": "old_username",
-    "email": "ema1il12@abcd.com",
-    "name": "old_name",
-    "surname": "old_surname",
-    "height": 1.1,
-    "weight": 800,
-    "birth_date": "23-4-1999",
-    "location": "Cordoba, Cordoba",
-    "registration_date": "23-3-2022",
-    "is_athlete": True
-}
 
 
 def equal_dicts(dict1, dict2, ignore_keys):
@@ -223,7 +168,7 @@ def test_can_retrieve_user_with_his_username(test_db):
     user_string = "users?username=" + create_response.json()["username"]
     get_response = client.get(user_string)
     assert get_response.status_code == 200
-    assert equal_dicts(get_response.json()["items"][0], user_2, ignored_keys)
+    assert equal_dicts(get_response.json(), user_2, ignored_keys)
 
 
 def test_cannot_retrieve_user_with_incorrect_username(test_db):
@@ -244,7 +189,7 @@ def test_can_retrieve_several_users_with_their_usernames(test_db):
         user_string = "users?username=" + create_response.json()["username"]
         get_response = client.get(user_string)
         assert get_response.status_code == 200
-        user = get_response.json()["items"][0]
+        user = get_response.json()
         assert equal_dicts(user, users[idx], ignored_keys)
 
 
@@ -363,3 +308,47 @@ def test_can_change_status_to_blocked_and_back_again_as_admin(test_db):
     get_response = client.get(get_url)
     assert patch_response.status_code == 200
     assert equal_dicts(get_response.json(), unblocked_user, {"id", "password"})
+
+
+def test_default_pagination_with_ten_users_returns_correct_values(test_db):
+    for idx in range(10):
+        email = {"email": "user_" + str(idx)}
+        set_testing_uid("user_" + str(idx) + "_id")
+        new_user = user_template_no_email | email
+        client.post("users", json=new_user)
+    set_testing_variables("admin", "magicword")
+    response = client.get("users")
+    correct_values = {"total": 10, "page": 1, "size": 10, "pages": 1}
+    assert equal_dicts(response.json(), correct_values, {"items"})
+
+
+def test_pagination_with_ten_users_and_two_pages_correct_values(test_db):
+    for idx in range(10):
+        email = {"email": "user_" + str(idx)}
+        set_testing_uid("user_" + str(idx) + "_id")
+        new_user = user_template_no_email | email
+        client.post("users", json=new_user)
+    set_testing_variables("admin", "magicword")
+    response = client.get("users?limit=5")
+    correct_values = {"total": 10, "page": 1, "size": 5, "pages": 2}
+    assert equal_dicts(response.json(), correct_values, {"items"})
+    response = client.get("users?limit=5&offset=5")
+    correct_values = {"total": 10, "page": 2, "size": 5, "pages": 2}
+    assert equal_dicts(response.json(), correct_values, {"items"})
+
+
+def test_pagination_with_ten_users_and_three_pages_correct_values(test_db):
+    for idx in range(10):
+        email = {"email": "user_" + str(idx)}
+        set_testing_uid("user_" + str(idx) + "_id")
+        new_user = user_template_no_email | email
+        client.post("users", json=new_user)
+    set_testing_variables("admin", "magicword")
+    for idx in range(4):
+        response = client.get("users?limit=" + str(3)
+                              + "&offset=" + str(3 * idx))
+        correct_values = {"total": 10, "page": 1 + idx, "size": 3, "pages": 4}
+        if idx == 3:
+            correct_values = {"total": 10, "page": 1 + idx,
+                              "size": 10 % 3, "pages": 4}
+        assert equal_dicts(response.json(), correct_values, {"items"})
