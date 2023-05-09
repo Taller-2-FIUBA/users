@@ -62,6 +62,4 @@ def update_user(session: Session, _id: str, user: UserUpdate):
 def get_details_with_id(session: Session, user_id: str):
     """Inverts blocked status for user with provided id."""
     user = session.query(Users).filter(Users.id == user_id).first()
-    if user is None:
-        return None, None
     return user.email, user.username
