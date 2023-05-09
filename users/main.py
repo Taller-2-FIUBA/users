@@ -43,7 +43,7 @@ CONFIGURATION = to_config(AppConfig)
 REQUEST_COUNTER = Counter(
     "my_failures", "Description of counter", ["endpoint", "http_verb"]
 )
-start_http_server(8001)
+start_http_server(8002)
 
 # Database initialization.
 # Maybe move this, so it is only run when required? Now it runs when ever
