@@ -362,14 +362,14 @@ HEADERS = {
     "access-control-request-method": "patch",
     "cache-control": "no-cache",
     "origin": "https://fiufit-backoffice-6kwbytb6g-fiufitgrupo5-gmailcom"
-        ".vercel.app",
+    ".vercel.app",
     "pragma": "no-cache",
     "referer": "http://localhost:3000/",
     "sec-fetch-dest": "empty",
     "sec-fetch-mode": "cors",
     "sec-fetch-site": "cross-site",
     "user-agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36"
-        "(KHTML, like Gecko) Chrome/112.0.0.0 Safari/537.36",
+    "(KHTML, like Gecko) Chrome/112.0.0.0 Safari/537.36",
 }
 
 

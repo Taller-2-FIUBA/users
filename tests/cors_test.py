@@ -1,8 +1,8 @@
 # pylint: disable= missing-module-docstring, missing-function-docstring
-from re import compile
+import re
 from users.main import ORIGIN_REGEX
 
-COMPILED_REGEX = compile(ORIGIN_REGEX)
+COMPILED_REGEX = re.compile(ORIGIN_REGEX)
 
 
 def test_origin_regex_should_match_vercel_url():
