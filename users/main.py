@@ -28,13 +28,29 @@ from users.admin.dto import AdminCreationDTO, AdminDTO
 
 app = FastAPI()
 
-allow_all = ['*']
+METHODS = [
+    "GET",
+    "get",
+    "POST",
+    "post",
+    "PUT",
+    "put",
+    "PATCH",
+    "patch",
+    "OPTIONS",
+    "options",
+    "DELETE",
+    "delete",
+    "HEAD",
+    "head",
+]
+ORIGIN_REGEX = "(http)?(s)?(://)?(.*vercel.app|localhost|local)(:3000)?.*"
 app.add_middleware(
     CORSMiddleware,
-    allow_origin_regex="(https://)?(.*vercel.app|localhost|local)(:3000)?.*",
+    allow_origin_regex=ORIGIN_REGEX,
     allow_credentials=True,
-    allow_methods=allow_all,
-    allow_headers=allow_all
+    allow_methods=METHODS,
+    allow_headers=['*']
 )
 
 CONFIGURATION = to_config(AppConfig)
