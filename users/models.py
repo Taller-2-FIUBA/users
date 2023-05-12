@@ -10,7 +10,7 @@ class Users(Base):
     """Table structure for user."""
 
     __tablename__ = "users"
-    id = Column(String, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     email = Column(String)
     username = Column(String)
     name = Column(String)
@@ -28,6 +28,6 @@ class Admin(Base):
     """Table structure for admin."""
 
     __tablename__ = "admin"
-    id = Column(String, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     email = Column(String)
     username = Column(String)

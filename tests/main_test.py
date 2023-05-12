@@ -7,7 +7,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from tests.testing_constants import user_1, user_2, user_3, \
-    user_to_update, user_template_no_email
+    user_to_update, user_template_no_email, private_keys
 from users.main import app, get_db
 from users.models import Base
 
@@ -128,7 +128,7 @@ def test_can_retrieve_user_with_his_id(test_db):
     set_testing_variables("admin", "magicword")
     set_testing_uid("user_1_id")
     response1 = client.post("users", json=user_1)
-    response2 = client.get("users/" + response1.json()["id"])
+    response2 = client.get("users/" + str(response1.json()["id"]))
     assert response2.status_code == 200
     assert equal_dicts(response2.json(), user_1, ignored_keys)
 
@@ -137,7 +137,7 @@ def test_cannot_retrieve_user_with_wrong_id(test_db):
     set_testing_variables("admin", "magicword")
     set_testing_uid("user_1_id")
     client.post("users", json=user_1)
-    response = client.get("users/" + "fake_id")
+    response = client.get("users/" + "2")
     assert response.status_code == 404
     assert response.json() == {"detail": "User not found"}
 
@@ -168,7 +168,7 @@ def test_can_retrieve_user_with_his_username(test_db):
     user_string = "users?username=" + create_response.json()["username"]
     get_response = client.get(user_string)
     assert get_response.status_code == 200
-    assert equal_dicts(get_response.json(), user_2, ignored_keys)
+    assert equal_dicts(get_response.json(), user_2, private_keys)
 
 
 def test_cannot_retrieve_user_with_incorrect_username(test_db):
@@ -190,7 +190,7 @@ def test_can_retrieve_several_users_with_their_usernames(test_db):
         get_response = client.get(user_string)
         assert get_response.status_code == 200
         user = get_response.json()
-        assert equal_dicts(user, users[idx], ignored_keys)
+        assert equal_dicts(user, users[idx], private_keys)
 
 
 def test_when_updating_user_data_expect_data(test_db):
@@ -199,7 +199,7 @@ def test_when_updating_user_data_expect_data(test_db):
     response_post = client.post("users", json=user_to_update)
     assert response_post.status_code == 200
     response_patch = client.patch(
-        "users/" + response_post.json()["id"],
+        "users/" + str(response_post.json()["id"]),
         json={
             "username": "new_username",
             "name": "new_name",
@@ -212,7 +212,7 @@ def test_when_updating_user_data_expect_data(test_db):
     )
     assert response_patch.status_code == 200
     assert response_patch.json() == {}
-    user = "users/" + response_post.json()["id"]
+    user = "users/" + str(response_post.json()["id"])
     response_get = client.get(user)
     assert response_get.status_code == 200
     assert equal_dicts(
@@ -239,7 +239,7 @@ def test_when_update_user_height_and_weight_expect_height_and_weight(test_db):
     response_post = client.post("users", json=user_to_update)
     assert response_post.status_code == 200
     response_patch = client.patch(
-        "users/" + response_post.json()["id"],
+        "users/" + str(response_post.json()["id"]),
         json={
             "height": 2.0,
             "weight": 100,
@@ -247,7 +247,7 @@ def test_when_update_user_height_and_weight_expect_height_and_weight(test_db):
     )
     assert response_patch.status_code == 200
     assert response_patch.json() == {}
-    user = "users/" + response_post.json()["id"]
+    user = "users/" + str(response_post.json()["id"])
     response_get = client.get(user)
     assert response_get.status_code == 200
     assert equal_dicts(
@@ -268,16 +268,16 @@ def test_when_update_user_height_and_weight_expect_height_and_weight(test_db):
     )
 
 
-def test_when_update_user_id_banana_expect_not_found(test_db):
+def test_when_updating_non_existent_user_id_expect_not_found(test_db):
     set_testing_variables("admin", "magicword")
-    response_patch = client.patch("users/banana", json={"height": 2.0})
+    response_patch = client.patch("users/54", json={"height": 2.0})
     assert response_patch.status_code == 404
 
 
 def test_cant_change_status_without_token(test_db):
     set_testing_uid("user_id")
     create_response = client.post("users", json=user_2)
-    user = "users/status/" + create_response.json()["id"]
+    user = "users/status/" + str(create_response.json()["id"])
     patch_response = client.patch(user)
     assert patch_response.status_code == 403
 
@@ -287,7 +287,7 @@ def test_cant_change_status_as_user(test_db):
     set_testing_uid("user_1_id")
     create_response = client.post("users", json=user_2)
     assert create_response.status_code == 200
-    url = "users/status/" + create_response.json()["id"]
+    url = "users/status/" + str(create_response.json()["id"])
     patch_response = client.patch(url)
     assert patch_response.status_code == 403
 
@@ -298,8 +298,8 @@ def test_can_change_status_to_blocked_and_back_again_as_admin(test_db):
     unblocked_user = user_1 | {"is_blocked": False}
     set_testing_uid("user_1_id")
     create_response = client.post("users", json=user_1)
-    patch_url = "users/status/" + create_response.json()["id"]
-    get_url = "users/" + create_response.json()["id"]
+    patch_url = "users/status/" + str(create_response.json()["id"])
+    get_url = "users/" + str(create_response.json()["id"])
     patch_response = client.patch(patch_url)
     get_response = client.get(get_url)
     assert patch_response.status_code == 200
@@ -313,9 +313,11 @@ def test_can_change_status_to_blocked_and_back_again_as_admin(test_db):
 def test_default_pagination_with_ten_users_returns_correct_values(test_db):
     for idx in range(10):
         email = {"email": "user_" + str(idx)}
-        set_testing_uid("user_" + str(idx) + "_id")
-        new_user = user_template_no_email | email
-        client.post("users", json=new_user)
+        username = {"username": "user_" + str(idx)}
+        set_testing_uid(str(idx))
+        new_user = user_template_no_email | email | username
+        res = client.post("users", json=new_user)
+        assert res.status_code == 200
     set_testing_variables("admin", "magicword")
     response = client.get("users")
     correct_values = {"total": 10, "page": 1, "size": 10, "pages": 1}
@@ -325,8 +327,9 @@ def test_default_pagination_with_ten_users_returns_correct_values(test_db):
 def test_pagination_with_ten_users_and_two_pages_correct_values(test_db):
     for idx in range(10):
         email = {"email": "user_" + str(idx)}
-        set_testing_uid("user_" + str(idx) + "_id")
-        new_user = user_template_no_email | email
+        username = {"username": "user_" + str(idx)}
+        set_testing_uid(str(idx))
+        new_user = user_template_no_email | email | username
         client.post("users", json=new_user)
     set_testing_variables("admin", "magicword")
     response = client.get("users?limit=5")
@@ -340,8 +343,10 @@ def test_pagination_with_ten_users_and_two_pages_correct_values(test_db):
 def test_pagination_with_ten_users_and_three_pages_correct_values(test_db):
     for idx in range(10):
         email = {"email": "user_" + str(idx)}
-        set_testing_uid("user_" + str(idx) + "_id")
-        new_user = user_template_no_email | email
+        set_testing_uid(str(idx))
+        username = {"username": "user_" + str(idx)}
+        set_testing_uid(str(idx))
+        new_user = user_template_no_email | email | username
         client.post("users", json=new_user)
     set_testing_variables("admin", "magicword")
     for idx in range(4):

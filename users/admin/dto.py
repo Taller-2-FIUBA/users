@@ -6,7 +6,7 @@ from pydantic import BaseModel
 class AdminDTO(BaseModel):
     """Admin details."""
 
-    id: str
+    id: int
     username: str
     email: str
 

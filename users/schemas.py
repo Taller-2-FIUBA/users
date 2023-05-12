@@ -40,7 +40,7 @@ class UserCreate(UserBase):
 class User(UserBase):
     """User after being created, id + details."""
 
-    id: str
+    id: int
     is_blocked: bool
 
     class Config:

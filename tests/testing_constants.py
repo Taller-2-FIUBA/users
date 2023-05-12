@@ -14,6 +14,18 @@ user_1 = {
     "is_athlete": True
 }
 
+private_keys = {
+    "id",
+    "password",
+    "username",
+    "height",
+    "weight",
+    "birth_date",
+    "registration_date",
+    "is_athlete",
+    "is_blocked"
+}
+
 user_2 = {
     "password": "pepito_pw",
     "username": "pepitobasura",
@@ -58,7 +70,6 @@ user_to_update = {
 
 user_template_no_email = {
     "password": "password",
-    "username": "username",
     "name": "name",
     "surname": "surname",
     "height": 1.15,
