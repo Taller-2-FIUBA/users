@@ -189,7 +189,7 @@ async def login(request: Request, session: Session = Depends(get_db)):
     return JSONResponse(content=body, status_code=200)
 
 
-def add_user(session: Session, user: UserBase):
+def validate_user(session: Session, user: UserBase):
     """Create new user in the database based on id and user details."""
     with session as open_session:
         db_user = get_user_by_email(open_session, email=user.email)
@@ -200,7 +200,6 @@ def add_user(session: Session, user: UserBase):
         if db_user:
             msg = "User with that username already present"
             raise HTTPException(status_code=400, detail=msg)
-        return create_user(session=open_session, user=user)
 
 
 @app.post("/users")
@@ -209,9 +208,9 @@ async def create(new_user: UserCreate, session: Session = Depends(get_db)):
     if new_user.email is None or new_user.password is None:
         msg = {'message': 'Error! Missing Email or Password'}
         raise HTTPException(detail=msg, status_code=400)
+    validate_user(session, new_user)
     await add_user_firebase(new_user.email, new_user.password)
-    with session as open_session:
-        return add_user(open_session, new_user)
+    return create_user(session=session, user=new_user)
 
 
 async def validate_idp_token(request: Request):
@@ -236,9 +235,9 @@ async def create_idp_user(request: Request,
     if user.email is None:
         msg = {'message': 'Error! Missing Email'}
         raise HTTPException(detail=msg, status_code=400)
+    validate_user(session, user)
     await validate_idp_token(request)
-    with session as open_session:
-        return add_user(open_session, user)
+    return create_user(session=session, user=user)
 
 
 @app.post("/login/usersIDP")
