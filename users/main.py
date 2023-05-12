@@ -19,12 +19,13 @@ from users.crud import (
     get_all_users,
     get_user_by_id,
     get_user_by_username,
-    update_user, change_blocked_status, get_details_with_id
+    update_user, change_blocked_status, get_details_with_id, get_user_by_email
 )
-from users.schemas import User, UserCreate, UserUpdate
+from users.schemas import UserCreate, UserUpdate, UserBase
 from users.models import Base
-from users.admin.dao import create_admin, get_all as get_all_admins
-from users.admin.dto import AdminCreationDTO, AdminDTO
+from users.admin.dao import create_admin, get_all as get_all_admins, \
+    get_admin_by_email
+from users.admin.dto import AdminCreationDTO
 
 app = FastAPI()
 
@@ -87,7 +88,10 @@ async def get_credentials(request):
             raise HTTPException(status_code=creds.status_code,
                                 detail=creds.json()["Message"])
         try:
-            return creds.json()['data']
+            return {
+                "role": creds.json()['data']["role"],
+                "id": int(creds.json()['data']["id"])
+            }
         except Exception as json_exception:
             msg = "Token format error"
             raise HTTPException(status_code=403,
@@ -99,7 +103,7 @@ async def get_credentials(request):
 async def get_token(role, user_id):
     """Return token with role and user_id passed by parameter."""
     url = f"http://{CONFIGURATION.auth.host}/auth/token?role=" + \
-          role + "&id=" + user_id
+          role + "&id=" + str(user_id)
     token = await httpx.AsyncClient().get(url)
     return token.json()["data"]
 
@@ -119,16 +123,8 @@ async def add_user_firebase(email, password):
     return res.json()["id"]
 
 
-def add_user(session: Session, user: User):
-    """Create new user in the database based on id and user details."""
-    with session as open_session:
-        db_user = get_user_by_id(open_session, user_id=user.id)
-        if db_user:
-            raise HTTPException(status_code=400, detail="User already present")
-        return create_user(session=open_session, user=user)
-
-
-async def token_login_firebase(request: Request, role: str):
+async def token_login_firebase(request: Request, role: str,
+                               session: Session):
     """Log in with token in request header."""
     req = await request.json()
     if "TESTING" in os.environ:
@@ -147,10 +143,10 @@ async def token_login_firebase(request: Request, role: str):
             raise HTTPException(status_code=res.status_code,
                                 detail=res.json()["Message"])
         return res.json()
-    return await regular_login_firebase(req, role)
+    return await regular_login_firebase(req, role, session)
 
 
-async def regular_login_firebase(body, role):
+async def regular_login_firebase(body, role, session: Session):
     """Log in with provided body and return token with proper role."""
     url = f"http://{CONFIGURATION.auth.host}/auth/login"
     res = await httpx.AsyncClient().post(url, json=body)
@@ -158,8 +154,12 @@ async def regular_login_firebase(body, role):
         raise HTTPException(status_code=res.status_code,
                             detail=res.json()["Message"])
     try:
-        user_id = res.json()["id"]
-        return {"token": await get_token(role, user_id), "id": user_id}
+        with session as open_session:
+            email = body["email"]
+        user = get_user_by_email(open_session, email=email)
+        if role == "admin":
+            user = get_admin_by_email(open_session, email=email)
+        return {"token": await get_token(role, user.id), "id": user.id}
     except Exception as json_exception:
         msg = "Login error"
         raise HTTPException(status_code=400, detail=msg) from json_exception
@@ -167,10 +167,24 @@ async def regular_login_firebase(body, role):
 
 # Endpoint definition
 @app.post("/users/login")
-async def login(request: Request):
+async def login(request: Request, session: Session = Depends(get_db)):
     """Log in to Firebase with email, password. Return token if successful."""
-    body = await token_login_firebase(request, "user")
+    body = await token_login_firebase(request, "user", session)
     return JSONResponse(content=body, status_code=200)
+
+
+def add_user(session: Session, user: UserBase):
+    """Create new user in the database based on id and user details."""
+    with session as open_session:
+        db_user = get_user_by_email(open_session, email=user.email)
+        if db_user:
+            msg = "User with that email already present"
+            raise HTTPException(status_code=400, detail=msg)
+        db_user = get_user_by_username(open_session, username=user.username)
+        if db_user:
+            msg = "User with that username already present"
+            raise HTTPException(status_code=400, detail=msg)
+        return create_user(session=open_session, user=user)
 
 
 @app.post("/users")
@@ -179,16 +193,55 @@ async def create(new_user: UserCreate, session: Session = Depends(get_db)):
     if new_user.email is None or new_user.password is None:
         msg = {'message': 'Error! Missing Email or Password'}
         raise HTTPException(detail=msg, status_code=400)
-    uid = await add_user_firebase(new_user.email, new_user.password)
-    details = {"id": uid, "is_blocked": False} | new_user.dict()
+    await add_user_firebase(new_user.email, new_user.password)
     with session as open_session:
-        return add_user(open_session, User(**details))
+        return add_user(open_session, new_user)
+
+
+async def validate_idp_token(request: Request):
+    """Validate IDP Token through auth microservice."""
+    auth_header = get_auth_header(request)
+    if auth_header is None:
+        msg = "Missing IDP token"
+        raise HTTPException(detail=msg, status_code=404)
+    request = await request.json()
+    url = f"http://{CONFIGURATION.auth.host}/auth/loginIDP"
+    res = await httpx.AsyncClient().post(url, json=request,
+                                         headers=auth_header)
+    if res.status_code != 200:
+        raise HTTPException(status_code=res.status_code,
+                            detail=res.json()["Message"])
+
+
+@app.post("/usersIDP")
+async def create_idp_user(request: Request,
+                          user: UserBase, session: Session = Depends(get_db)):
+    """Create new user with federated identity in database."""
+    if user.email is None:
+        msg = {'message': 'Error! Missing Email'}
+        raise HTTPException(detail=msg, status_code=400)
+    await validate_idp_token(request)
+    with session as open_session:
+        return add_user(open_session, user)
+
+
+@app.post("/login/usersIDP")
+async def login_idp(request: Request, session: Session = Depends(get_db)):
+    """Verify user is logged in through IDP and return token."""
+    await validate_idp_token(request)
+    request = await request.json()
+    with session as open_session:
+        user = get_user_by_email(session=open_session, email=request["email"])
+        if user is None:
+            msg = {'message': 'No user with such an email'}
+            raise HTTPException(detail=msg, status_code=404)
+    return {"token": await get_token("user", user.id), "id": user.id}
 
 
 @app.get("/users/{_id}")
 async def get_one(
     request: Request,
-    _id: str,
+    _id: int,
     session: Session = Depends(get_db)
 ):
     """Retrieve details for users with specified id."""
@@ -204,7 +257,7 @@ async def get_one(
 
 @app.patch("/users/status/{_id}")
 async def change_status(request: Request,
-                        _id: str,
+                        _id: int,
                         session: Session = Depends(get_db)):
     """Invert blocked status of a user.
 
@@ -223,7 +276,7 @@ async def change_status(request: Request,
 @app.patch("/users/{_id}")
 async def patch_user(
     request: Request,
-    _id: str,
+    _id: int,
     user: UserUpdate,
     session: Session = Depends(get_db)
 ):
@@ -259,7 +312,7 @@ async def get_all(
 
 @app.post("/users/recovery/{user_id}")
 async def password_recovery(request: Request,
-                            user_id: str, session: Session = Depends(get_db)):
+                            user_id: int, session: Session = Depends(get_db)):
     """Request auth service to start password recovery for user_id."""
     auth_header = get_auth_header(request)
     if auth_header is None:
@@ -294,10 +347,9 @@ async def add_admin(
     if new_admin.password is None:
         msg = {'message': 'Error! Missing Password.'}
         raise HTTPException(detail=msg, status_code=400)
-    uid = add_user_firebase(new_admin.email, new_admin.password)
-    fields_and_values = {"id": uid} | new_admin.dict()
+    await add_user_firebase(new_admin.email, new_admin.password)
     with session as open_session:
-        return create_admin(open_session, AdminDTO(**fields_and_values))
+        return create_admin(open_session, new_admin)
 
 
 @app.get("/admins")
@@ -311,7 +363,7 @@ async def get_admins(request: Request, session: Session = Depends(get_db)):
 
 
 @app.post("/admins/login")
-async def admin_login(request: Request):
+async def admin_login(request: Request, session: Session = Depends(get_db)):
     """Login as administrator. Return token if successful."""
-    body = await token_login_firebase(request, "admin")
+    body = await token_login_firebase(request, "admin", session)
     return JSONResponse(content=body, status_code=200)
