@@ -233,7 +233,7 @@ async def login_idp(request: Request, session: Session = Depends(get_db)):
     with session as open_session:
         user = get_user_by_email(session=open_session, email=request["email"])
         if user is None:
-            msg = {'message': 'No user with such an email'}
+            msg = {'message': 'No IDP user with such an email'}
             raise HTTPException(detail=msg, status_code=404)
     return {"token": await get_token("user", user.id), "id": user.id}
 
