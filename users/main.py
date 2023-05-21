@@ -218,7 +218,7 @@ async def validate_idp_token(request: Request):
     auth_header = get_auth_header(request)
     if auth_header is None:
         msg = "Missing IDP token"
-        raise HTTPException(detail=msg, status_code=404)
+        raise HTTPException(detail=msg, status_code=400)
     request = await request.json()
     url = f"http://{CONFIGURATION.auth.host}/auth/loginIDP"
     res = await httpx.AsyncClient().post(url, json=request,
@@ -228,7 +228,7 @@ async def validate_idp_token(request: Request):
                             detail=res.json()["Message"])
 
 
-@app.post("/usersIDP")
+@app.post("/users/usersIDP")
 async def create_idp_user(request: Request,
                           user: UserBase, session: Session = Depends(get_db)):
     """Create new user with federated identity in database."""
@@ -240,7 +240,7 @@ async def create_idp_user(request: Request,
     return create_user(session=session, user=user)
 
 
-@app.post("/login/usersIDP")
+@app.post("/users/login/usersIDP")
 async def login_idp(request: Request, session: Session = Depends(get_db)):
     """Verify user is logged in through IDP and return token."""
     await validate_idp_token(request)
