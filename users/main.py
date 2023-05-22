@@ -136,7 +136,6 @@ async def add_user_firebase(email, password):
     res = await httpx.AsyncClient().post(url, json=body)
     if res.status_code != 200:
         raise HTTPException(status_code=res.status_code, detail=res.json())
-    return res.json()["id"]
 
 
 async def token_login_firebase(request: Request, role: str,
