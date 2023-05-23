@@ -60,7 +60,7 @@ CONFIGURATION = to_config(AppConfig)
 REQUEST_COUNTER = Counter(
     "my_failures", "Description of counter", ["endpoint", "http_verb"]
 )
-start_http_server(8002)
+start_http_server(8001)
 
 # Database initialization.
 # Maybe move this, so it is only run when required? Now it runs when ever
@@ -324,24 +324,16 @@ async def get_all(
     return db_user
 
 
-@app.post("/users/recovery/{user_id}")
-async def password_recovery(request: Request,
-                            user_id: int, session: Session = Depends(get_db)):
+@app.post("/users/recovery/{username}")
+async def password_recovery(username: str, session: Session = Depends(get_db)):
     """Request auth service to start password recovery for user_id."""
-    auth_header = get_auth_header(request)
-    if auth_header is None:
-        raise HTTPException(status_code=403, detail="No token")
-    token = await get_credentials(request)
-    if token["id"] != user_id:
-        raise HTTPException(status_code=403, detail="Invalid credentials")
     with session as open_session:
-        db_user = get_user_by_id(open_session, user_id=user_id)
+        db_user = get_user_by_username(session=open_session, username=username)
         if db_user is None:
             raise HTTPException(status_code=404, detail="User not found")
-        email, username = get_details_with_id(open_session, user_id)
-    url = f"http://{CONFIGURATION.auth.host}/auth/recovery?email=" + email \
+    url = f"http://{CONFIGURATION.auth.host}/auth/recovery?email=" + db_user["email"] \
           + "&username=" + username
-    res = await httpx.AsyncClient().post(url, headers=auth_header)
+    res = await httpx.AsyncClient().post(url)
     if res.status_code != 200:
         raise HTTPException(status_code=res.status_code,
                             detail=res.json()["Message"])
