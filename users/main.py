@@ -19,7 +19,7 @@ from users.crud import (
     get_all_users,
     get_user_by_id,
     get_user_by_username,
-    update_user, change_blocked_status, get_details_with_id, get_user_by_email
+    update_user, change_blocked_status, get_user_by_email
 )
 from users.schemas import UserCreate, UserUpdate, UserBase
 from users.models import Base
@@ -331,8 +331,8 @@ async def password_recovery(username: str, session: Session = Depends(get_db)):
         db_user = get_user_by_username(session=open_session, username=username)
         if db_user is None:
             raise HTTPException(status_code=404, detail="User not found")
-    url = f"http://{CONFIGURATION.auth.host}/auth/recovery?email=" + db_user["email"] \
-          + "&username=" + username
+    url = f"http://{CONFIGURATION.auth.host}/auth/recovery?email=" + \
+          db_user["email"] + "&username=" + username
     res = await httpx.AsyncClient().post(url)
     if res.status_code != 200:
         raise HTTPException(status_code=res.status_code,
