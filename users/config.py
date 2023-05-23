@@ -16,7 +16,7 @@ class AppConfig:
         driver = var("postgresql")
         password = var("postgres")
         user = var("postgres")
-        host = "localhost"
+        host = var("user_db")
         port = var(5432, converter=int)
         database = var("postgres")
 
@@ -24,7 +24,7 @@ class AppConfig:
     class AUTH:
         """Authentication service configuration."""
 
-        host = "localhost:8002"
+        host = var("auth-svc")
 
     @config
     class TEST:
