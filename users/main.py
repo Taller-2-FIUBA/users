@@ -106,7 +106,7 @@ async def get_credentials(request):
         try:
             return {
                 "role": creds.json()['data']["role"],
-                "id": int(creds.json()['data']["id"])
+                "id": creds.json()['data']["id"]
             }
         except Exception as json_exception:
             msg = "Token format error"
