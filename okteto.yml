@@ -1,5 +1,5 @@
 deploy:
   - envsubst < kubernetes/configmap.yaml > kubernetes/configmap_with_env.yaml
-  - kubectl apply -f kubernetes/configmap_with_env.yaml -n $NAMESPACE
-  - kubectl apply -f kubernetes/deployment.yaml -n $NAMESPACE
-  - kubectl apply -f kubernetes/service.yaml -n $NAMESPACE
+  - kubectl apply -f kubernetes/configmap_with_env.yaml
+  - kubectl apply -f kubernetes/deployment.yaml
+  - kubectl apply -f kubernetes/service.yaml
