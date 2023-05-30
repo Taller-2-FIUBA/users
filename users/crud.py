@@ -2,7 +2,7 @@
 import math
 
 from sqlalchemy.orm import Session
-from users.models import Users
+from users.models import Users, FollowedUsers
 from users.schemas import UserUpdate, UserBase
 
 
@@ -72,7 +72,28 @@ def update_user(session: Session, _id: int, user: UserUpdate):
     session.commit()
 
 
-def get_details_with_id(session: Session, user_id: int):
+def get_users_followed_by(session: Session, _id: int):
     """Inverts blocked status for user with provided id."""
-    user = session.query(Users).filter(Users.id == user_id).first()
-    return user.email, user.username
+    vec = []
+    users = session.query(FollowedUsers).filter(FollowedUsers.id == _id).all()
+    for pair in users:
+        vec.append(get_user_by_id(session, pair.followed_id))
+    return vec
+
+
+def follow_new_user(session: Session, user_id: int, _id: int):
+    """Add new followed user to specified user."""
+    new_follow = FollowedUsers(id=user_id, followed_id=_id)
+    session.add(new_follow)
+    session.commit()
+    session.refresh(new_follow)
+    return get_users_followed_by(session, user_id)
+
+
+def unfollow_user(session: Session, user_id: int, _id: int):
+    """Unfollow specified user."""
+    session.query(FollowedUsers).filter(FollowedUsers.id == user_id,
+                                        FollowedUsers.followed_id == _id)\
+        .delete()
+    session.commit()
+    return get_users_followed_by(session, user_id)
