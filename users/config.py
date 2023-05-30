@@ -1,5 +1,5 @@
 """Application configuration."""
-from environ import config, var, group
+from environ import bool_var, config, var, group
 
 
 @config(prefix="USERS")
@@ -34,6 +34,14 @@ class AppConfig:
         user_id = var("magicword")
         role = var("admin")
 
+    @config(prefix="SENTRY")
+    class Sentry:
+        """Sentry configuration."""
+
+        enabled = bool_var(False)
+        dsn = var("https://token@sentry.ingest.localhost")
+
     db = group(DB)  # type: ignore
     auth = group(AUTH)  # type: ignore
     test = group(TEST)  # type: ignore
+    sentry = group(Sentry)
