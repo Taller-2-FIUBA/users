@@ -3,6 +3,7 @@ import os
 from typing import Optional
 import httpx
 
+import sentry_sdk
 from fastapi import FastAPI, HTTPException, Depends, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -26,6 +27,11 @@ from users.models import Base
 from users.admin.dao import create_admin, get_all as get_all_admins, \
     get_admin_by_email
 from users.admin.dto import AdminCreationDTO
+
+CONFIGURATION = to_config(AppConfig)
+
+if CONFIGURATION.sentry.enabled:
+    sentry_sdk.init(dsn=CONFIGURATION.sentry.dsn, traces_sample_rate=0.5)
 
 app = FastAPI()
 
@@ -53,8 +59,6 @@ app.add_middleware(
     allow_methods=METHODS,
     allow_headers=['*']
 )
-
-CONFIGURATION = to_config(AppConfig)
 
 # Metrics
 REQUEST_COUNTER = Counter(

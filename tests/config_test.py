@@ -87,3 +87,33 @@ def test_when_environment_user_id_expect_banana():
 def test_when_environment_role_expect_awesome_role():
     cnf = to_config(AppConfig)
     assert cnf.test.role == "AwesomeRole"
+
+
+@patch.dict(environ, {}, clear=True)
+def test_when_environment_sentry_enabled_is_not_set_expect_false():
+    cnf = to_config(AppConfig)
+    assert not cnf.sentry.enabled
+
+
+@patch.dict(
+    environ, {"USERS_SENTRY_ENABLED": "true"}, clear=True
+)
+def test_when_environment_sentry_enabled_is_true_expect_true():
+    cnf = to_config(AppConfig)
+    assert cnf.sentry.enabled
+
+
+@patch.dict(environ, {}, clear=True)
+def test_when_sentry_dsn_is_empty_expect_localhost():
+    cnf = to_config(AppConfig)
+    assert cnf.sentry.dsn == "https://token@sentry.ingest.localhost"
+
+
+@patch.dict(
+    environ,
+    {"USERS_SENTRY_DSN": "https://wf313c@24t2tg2g.ingest.sentry.io/33433"},
+    clear=True
+)
+def test_when_sentry_dsn_has_sentry_url_expect_it():
+    cnf = to_config(AppConfig)
+    assert cnf.sentry.dsn == "https://wf313c@24t2tg2g.ingest.sentry.io/33433"
