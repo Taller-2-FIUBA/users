@@ -11,5 +11,5 @@ data:
   USERS_DB_USER: "backend"
   USERS_DB_PASSWORD: $USERS_DB_PASSWORD
   USERS_DB_HOST: "dpg-cgno8m8rddl9mmvdaja0-a.oregon-postgres.render.com"
-  USERS_AUTH_HOST: auth-service.$NAMESPACE.svc.cluster.local:8002
+  USERS_AUTH_HOST: auth-service.taller2-marianocinalli.svc.cluster.local:8002
   USERS_TEST_IS_TESTING: "False"
