@@ -1,4 +1,5 @@
 """Define all endpoints here."""
+import logging
 import os
 from typing import Optional
 import httpx
@@ -10,11 +11,11 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 from environ import to_config
-from prometheus_client import start_http_server, Counter
+from prometheus_client import start_http_server
 
+import users.metrics as m
 from users.config import AppConfig
 from users.database import get_database_url
-
 from users.crud import (
     create_user,
     get_all_users,
@@ -33,6 +34,7 @@ CONFIGURATION = to_config(AppConfig)
 if CONFIGURATION.sentry.enabled:
     sentry_sdk.init(dsn=CONFIGURATION.sentry.dsn, traces_sample_rate=0.5)
 
+logging.basicConfig(encoding="utf-8", level=CONFIGURATION.log_level.upper())
 app = FastAPI()
 
 METHODS = [
@@ -61,10 +63,7 @@ app.add_middleware(
 )
 
 # Metrics
-REQUEST_COUNTER = Counter(
-    "my_failures", "Description of counter", ["endpoint", "http_verb"]
-)
-start_http_server(8002)
+start_http_server(CONFIGURATION.prometheus_port)
 
 # Database initialization.
 # Maybe move this, so it is only run when required? Now it runs when ever
@@ -72,6 +71,7 @@ start_http_server(8002)
 # structure.
 ENGINE = create_engine(get_database_url(CONFIGURATION))
 if "TESTING" not in os.environ:
+    logging.info("Building database...")
     Base.metadata.create_all(bind=ENGINE)
 
 
@@ -92,6 +92,7 @@ def get_auth_header(request):
 # Move to their own module
 async def get_credentials(request):
     """Get user details from token in request header."""
+    logging.info("Getting user credentials...")
     if "TESTING" in os.environ:
         if "TOKEN_ID" not in os.environ or "TOKEN_ROLE" not in os.environ:
             raise HTTPException(status_code=403)
@@ -101,12 +102,15 @@ async def get_credentials(request):
         }
         return testing_token
     url = f"http://{CONFIGURATION.auth.host}/auth/credentials"
+    logging.info("Getting user credentials in auth service: %s", url)
     auth_header = get_auth_header(request)
     if auth_header is not None:
+        logging.info("Using auth header: %s...", auth_header)
         creds = await httpx.AsyncClient().get(url, headers=auth_header)
         if creds.status_code != 200:
-            raise HTTPException(status_code=creds.status_code,
-                                detail=creds.json()["Message"])
+            error = creds.json()["Message"]
+            logging.error("Error when trying to authenticate: %s", error)
+            raise HTTPException(status_code=creds.status_code, detail=error)
         try:
             return {
                 "role": creds.json()['data']["role"],
@@ -114,6 +118,7 @@ async def get_credentials(request):
             }
         except Exception as json_exception:
             msg = "Token format error"
+            logging.exception("Error when trying to authenticate")
             raise HTTPException(status_code=403,
                                 detail=msg) from json_exception
     else:
@@ -122,6 +127,7 @@ async def get_credentials(request):
 
 async def get_token(role, user_id):
     """Return token with role and user_id passed by parameter."""
+    logging.info("Getting token for %d with role %s", user_id, role)
     url = f"http://{CONFIGURATION.auth.host}/auth/token?role=" + \
           role + "&id=" + str(user_id)
     token = await httpx.AsyncClient().get(url)
@@ -130,6 +136,7 @@ async def get_token(role, user_id):
 
 async def add_user_firebase(email, password):
     """Add user to firebase and return uid."""
+    logging.info("Creating user: %s password: %s in firebase", email, password)
     if "TESTING" in os.environ:
         return os.environ["TEST_ID"]
     body = {
@@ -137,9 +144,12 @@ async def add_user_firebase(email, password):
         "password": password
     }
     url = f"http://{CONFIGURATION.auth.host}/auth"
+    logging.info("Creating user in auth service: %s", url)
     res = await httpx.AsyncClient().post(url, json=body)
     if res.status_code != 200:
-        raise HTTPException(status_code=res.status_code, detail=res.json())
+        error = res.json()
+        logging.error("Error when trying to authenticate: %s", error)
+        raise HTTPException(status_code=res.status_code, detail=error)
 
 
 async def token_login_firebase(request: Request, role: str,
@@ -154,13 +164,16 @@ async def token_login_firebase(request: Request, role: str,
             "id": os.environ["TOKEN_ID"]
         }
     url = f"http://{CONFIGURATION.auth.host}/auth/tokenLogin"
+    logging.info("Logging user with token in auth service: %s", url)
     auth_header = get_auth_header(request)
     if auth_header is not None:
+        logging.info("Using auth header: %s...", auth_header)
         res = await httpx.AsyncClient().post(url, json=req,
                                              headers=auth_header)
         if res.status_code != 200:
-            raise HTTPException(status_code=res.status_code,
-                                detail=res.json()["Message"])
+            error = res.json()["Message"]
+            logging.error("Error when trying to login with token: %s", error)
+            raise HTTPException(status_code=res.status_code, detail=error)
         return res.json()
     return await regular_login_firebase(req, role, session)
 
@@ -168,10 +181,12 @@ async def token_login_firebase(request: Request, role: str,
 async def regular_login_firebase(body, role, session: Session):
     """Log in with provided body and return token with proper role."""
     url = f"http://{CONFIGURATION.auth.host}/auth/login"
+    logging.info("Logging 'regular' user in auth service: %s", url)
     res = await httpx.AsyncClient().post(url, json=body)
     if res.status_code != 200:
-        raise HTTPException(status_code=res.status_code,
-                            detail=res.json()["Message"])
+        error = res.json()["Message"]
+        logging.error("Error when trying to login user: %s", error)
+        raise HTTPException(status_code=res.status_code, detail=error)
     try:
         with session as open_session:
             email = body["email"]
@@ -181,6 +196,7 @@ async def regular_login_firebase(body, role, session: Session):
         return {"token": await get_token(role, user.id), "id": user.id}
     except Exception as json_exception:
         msg = "Login error"
+        logging.exception("Error when trying to login user.")
         raise HTTPException(status_code=400, detail=msg) from json_exception
 
 
@@ -188,70 +204,91 @@ async def regular_login_firebase(body, role, session: Session):
 @app.post("/users/login")
 async def login(request: Request, session: Session = Depends(get_db)):
     """Log in to Firebase with email, password. Return token if successful."""
+    m.REQUEST_COUNTER.labels("/users/login", "post").inc()
+    logging.info("Log-in user %s...")
     body = await token_login_firebase(request, "user", session)
     return JSONResponse(content=body, status_code=200)
 
 
 def validate_user(session: Session, user: UserBase):
     """Create new user in the database based on id and user details."""
+    logging.info("Validating user...")
     with session as open_session:
         db_user = get_user_by_email(open_session, email=user.email)
         if db_user:
             msg = "User with that email already present"
+            logging.warning("Error creating user: %s", msg)
             raise HTTPException(status_code=400, detail=msg)
         db_user = get_user_by_username(open_session, username=user.username)
         if db_user:
             msg = "User with that username already present"
+            logging.warning("Error creating user: %s", msg)
             raise HTTPException(status_code=400, detail=msg)
 
 
 @app.post("/users")
 async def create(new_user: UserCreate, session: Session = Depends(get_db)):
     """Create new user in Firebase, add it to the database if successful."""
+    logging.info("Creating user %s...", new_user)
+    m.REQUEST_COUNTER.labels("/users", "post").inc()
     if new_user.email is None or new_user.password is None:
         msg = {'message': 'Error! Missing Email or Password'}
+        logging.warning(
+            "Error creating user: %s password: %s",
+            new_user.email, new_user.password
+        )
         raise HTTPException(detail=msg, status_code=400)
     validate_user(session, new_user)
     await add_user_firebase(new_user.email, new_user.password)
+    logging.debug("Creating user in DB...")
     return create_user(session=session, user=new_user)
 
 
 async def validate_idp_token(request: Request):
     """Validate IDP Token through auth microservice."""
+    logging.debug("Validating IDP token...")
     auth_header = get_auth_header(request)
     if auth_header is None:
         msg = "Missing IDP token"
         raise HTTPException(detail=msg, status_code=400)
     request = await request.json()
     url = f"http://{CONFIGURATION.auth.host}/auth/loginIDP"
+    logging.info("Validating IDP token '%s' in '%s'", auth_header, url)
     res = await httpx.AsyncClient().post(url, json=request,
                                          headers=auth_header)
     if res.status_code != 200:
-        raise HTTPException(status_code=res.status_code,
-                            detail=res.json()["Message"])
+        error = res.json()["Message"]
+        logging.error("Error when trying to login with token: %s", error)
+        raise HTTPException(status_code=res.status_code, detail=error)
 
 
 @app.post("/users/usersIDP")
 async def create_idp_user(request: Request,
                           user: UserBase, session: Session = Depends(get_db)):
     """Create new user with federated identity in database."""
+    logging.info("Creating user with IDP token...")
+    m.REQUEST_COUNTER.labels("/users/usersIDP", "post").inc()
     if user.email is None:
         msg = {'message': 'Error! Missing Email'}
         raise HTTPException(detail=msg, status_code=400)
     validate_user(session, user)
     await validate_idp_token(request)
+    logging.debug("Creating user in DB...")
     return create_user(session=session, user=user)
 
 
 @app.post("/users/login/usersIDP")
 async def login_idp(request: Request, session: Session = Depends(get_db)):
     """Verify user is logged in through IDP and return token."""
+    logging.info("Log-in user with IDP token...")
+    m.REQUEST_COUNTER.labels("/users/login/usersIDP", "post").inc()
     await validate_idp_token(request)
     request = await request.json()
     with session as open_session:
         user = get_user_by_email(session=open_session, email=request["email"])
         if user is None:
             msg = {'message': 'No IDP user with such an email'}
+            logging.warning("Could not login with IDP token: %s", msg)
             raise HTTPException(detail=msg, status_code=404)
     return {"token": await get_token("user", user.id), "id": user.id}
 
@@ -263,8 +300,11 @@ async def get_one(
     session: Session = Depends(get_db)
 ):
     """Retrieve details for users with specified id."""
+    logging.info("Retrieving user %d details...", _id)
+    m.REQUEST_COUNTER.labels("/users/{_id}", "get").inc()
     token = await get_credentials(request)
     if not token["role"] == "admin" and not token["role"] == "user":
+        logging.warning("Invalid role %s", token["role"])
         raise HTTPException(status_code=403, detail="Invalid credentials")
     with session as open_session:
         db_user = get_user_by_id(open_session, user_id=_id)
@@ -281,8 +321,11 @@ async def change_status(request: Request,
 
     Only admins allowed, can't block other admins
     """
+    logging.info("Changing user %d status...", _id)
+    m.REQUEST_COUNTER.labels("/users/status/{_id}", "patch").inc()
     token = await get_credentials(request)
     if not token["role"] == "admin":
+        logging.warning("Invalid role %s", token["role"])
         raise HTTPException(status_code=403, detail="Invalid credentials")
     with session as open_session:
         db_user = get_user_by_id(open_session, user_id=_id)
@@ -299,8 +342,11 @@ async def patch_user(
     session: Session = Depends(get_db)
 ):
     """Update user data."""
+    m.REQUEST_COUNTER.labels("/users/{_id}", "patch").inc()
+    logging.info("Updating user %d status...", _id)
     token = await get_credentials(request)
     if token["role"] == "user" and token["id"] != _id:
+        logging.warning("Invalid role %s", token["role"])
         raise HTTPException(status_code=403, detail="Invalid credentials")
     with session as open_session:
         if get_user_by_id(open_session, user_id=_id) is None:
@@ -319,6 +365,8 @@ async def get_all(
     session: Session = Depends(get_db)
 ):
     """Retrieve details for all users currently present in the database."""
+    logging.info("Retrieving users...")
+    m.REQUEST_COUNTER.labels("/users", "patch").inc()
     with session as open_session:
         if username is None:
             return get_all_users(open_session, limit=limit, offset=offset)
@@ -331,16 +379,20 @@ async def get_all(
 @app.post("/users/recovery/{username}")
 async def password_recovery(username: str, session: Session = Depends(get_db)):
     """Request auth service to start password recovery for user_id."""
+    logging.info("Recovering password for user %s...", username)
+    m.REQUEST_COUNTER.labels("/users/recovery/{username}", "post").inc()
     with session as open_session:
         db_user = get_user_by_username(session=open_session, username=username)
         if db_user is None:
             raise HTTPException(status_code=404, detail="User not found")
     url = f"http://{CONFIGURATION.auth.host}/auth/recovery?email=" + \
           db_user["email"] + "&username=" + username
+    logging.info("Requesting password recovery to %s...", url)
     res = await httpx.AsyncClient().post(url)
     if res.status_code != 200:
-        raise HTTPException(status_code=res.status_code,
-                            detail=res.json()["Message"])
+        error = res.json()["Message"]
+        logging.error("Error when recovering password: %s", error)
+        raise HTTPException(status_code=res.status_code, detail=error)
     return JSONResponse(content={}, status_code=200)
 
 
@@ -351,6 +403,8 @@ async def add_admin(
     session: Session = Depends(get_db)
 ):
     """Create an admin."""
+    logging.info("Creating admin...")
+    m.REQUEST_COUNTER.labels("/admins", "post").inc()
     if new_admin.email is None:
         msg = {'message': 'Error! Missing Email.'}
         raise HTTPException(detail=msg, status_code=400)
@@ -365,8 +419,11 @@ async def add_admin(
 @app.get("/admins")
 async def get_admins(request: Request, session: Session = Depends(get_db)):
     """Return all administrators."""
+    logging.info("Retrieving admins...")
+    m.REQUEST_COUNTER.labels("/admins", "get").inc()
     token = await get_credentials(request)
     if token["role"] != "admin":
+        logging.warning("Invalid role %s", token["role"])
         raise HTTPException(status_code=403, detail="Invalid credentials")
     with session as open_session:
         return get_all_admins(open_session)
@@ -375,5 +432,7 @@ async def get_admins(request: Request, session: Session = Depends(get_db)):
 @app.post("/admins/login")
 async def admin_login(request: Request, session: Session = Depends(get_db)):
     """Login as administrator. Return token if successful."""
+    logging.info("Login admins...")
+    m.REQUEST_COUNTER.labels("/admins/login", "post").inc()
     body = await token_login_firebase(request, "admin", session)
     return JSONResponse(content=body, status_code=200)
