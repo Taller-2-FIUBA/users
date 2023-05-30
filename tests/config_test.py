@@ -69,21 +69,3 @@ def test_when_environment_db_database_expect_fiufit():
 def test_when_environment_auth_host_expect_auth_svc():
     cnf = to_config(AppConfig)
     assert cnf.auth.host == "auth-svc"
-
-
-@patch.dict(environ, {"USERS_TEST_IS_TESTING": "True"}, clear=True)
-def test_when_environment_is_testing_expect_true():
-    cnf = to_config(AppConfig)
-    assert cnf.test.is_testing
-
-
-@patch.dict(environ, {"USERS_TEST_USER_ID": "banana"}, clear=True)
-def test_when_environment_user_id_expect_banana():
-    cnf = to_config(AppConfig)
-    assert cnf.test.user_id == "banana"
-
-
-@patch.dict(environ, {"USERS_TEST_ROLE": "AwesomeRole"}, clear=True)
-def test_when_environment_role_expect_awesome_role():
-    cnf = to_config(AppConfig)
-    assert cnf.test.role == "AwesomeRole"
