@@ -26,14 +26,6 @@ class AppConfig:
 
         host = var("auth-svc")
 
-    @config
-    class TEST:
-        """Test configurations."""
-
-        is_testing = var(True, converter=bool)
-        user_id = var("magicword")
-        role = var("admin")
-
     @config(prefix="SENTRY")
     class Sentry:
         """Sentry configuration."""
@@ -43,5 +35,4 @@ class AppConfig:
 
     db = group(DB)  # type: ignore
     auth = group(AUTH)  # type: ignore
-    test = group(TEST)  # type: ignore
     sentry = group(Sentry)

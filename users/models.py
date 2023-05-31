@@ -1,6 +1,6 @@
 """Defines table structure for each table in the database."""
 
-from sqlalchemy import Column, String, Integer, Float, Boolean
+from sqlalchemy import Column, String, Integer, Float, Boolean, ForeignKey
 from sqlalchemy.orm import declarative_base
 
 Base = declarative_base()
@@ -22,6 +22,14 @@ class Users(Base):
     registration_date = Column(String)
     is_athlete = Column(Boolean)
     is_blocked = Column(Boolean)
+
+
+class FollowedUsers(Base):
+    """Table structure for user."""
+
+    __tablename__ = "usersFollowed"
+    id = Column(Integer, ForeignKey("users.id"), primary_key=True)
+    followed_id = Column(Integer, ForeignKey("users.id"), primary_key=True)
 
 
 class Admin(Base):

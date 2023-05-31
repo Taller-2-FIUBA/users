@@ -2,9 +2,10 @@
 import logging
 import os
 from typing import Optional
+import sentry_sdk
 import httpx
 
-import sentry_sdk
+
 from fastapi import FastAPI, HTTPException, Depends, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -21,13 +22,19 @@ from users.crud import (
     get_all_users,
     get_user_by_id,
     get_user_by_username,
-    update_user, change_blocked_status, get_user_by_email
+    update_user,
+    change_blocked_status,
+    get_user_by_email,
+    get_users_followed_by,
+    unfollow_user,
+    follow_new_user
 )
 from users.schemas import UserCreate, UserUpdate, UserBase
 from users.models import Base
-from users.admin.dao import create_admin, get_all as get_all_admins, \
-    get_admin_by_email
+from users.admin.dao import create_admin, get_all as get_all_admins
 from users.admin.dto import AdminCreationDTO
+from users.util import get_auth_header, \
+    get_credentials, get_token, add_user_firebase, token_login_firebase
 
 CONFIGURATION = to_config(AppConfig)
 
@@ -79,125 +86,6 @@ if "TESTING" not in os.environ:
 def get_db() -> Session:
     """Create a session."""
     return Session(autocommit=False, autoflush=False, bind=ENGINE)
-
-
-def get_auth_header(request):
-    """Check existence auth header, return it or None if it doesn't exist."""
-    auth_header = request.headers.get("Authorization")
-    if auth_header is None:
-        return None
-    return {"Authorization": auth_header}
-
-
-# Move to their own module
-async def get_credentials(request):
-    """Get user details from token in request header."""
-    logging.info("Getting user credentials...")
-    if "TESTING" in os.environ:
-        if "TOKEN_ID" not in os.environ or "TOKEN_ROLE" not in os.environ:
-            raise HTTPException(status_code=403)
-        testing_token = {
-            "id": os.environ["TOKEN_ID"],
-            "role": os.environ["TOKEN_ROLE"],
-        }
-        return testing_token
-    url = f"http://{CONFIGURATION.auth.host}/auth/credentials"
-    logging.info("Getting user credentials in auth service: %s", url)
-    auth_header = get_auth_header(request)
-    if auth_header is not None:
-        logging.info("Using auth header: %s...", auth_header)
-        creds = await httpx.AsyncClient().get(url, headers=auth_header)
-        if creds.status_code != 200:
-            error = creds.json()["Message"]
-            logging.error("Error when trying to authenticate: %s", error)
-            raise HTTPException(status_code=creds.status_code, detail=error)
-        try:
-            return {
-                "role": creds.json()['data']["role"],
-                "id": creds.json()['data']["id"]
-            }
-        except Exception as json_exception:
-            msg = "Token format error"
-            logging.exception("Error when trying to authenticate")
-            raise HTTPException(status_code=403,
-                                detail=msg) from json_exception
-    else:
-        raise HTTPException(status_code=403, detail="No token")
-
-
-async def get_token(role, user_id):
-    """Return token with role and user_id passed by parameter."""
-    logging.info("Getting token for %d with role %s", user_id, role)
-    url = f"http://{CONFIGURATION.auth.host}/auth/token?role=" + \
-          role + "&id=" + str(user_id)
-    token = await httpx.AsyncClient().get(url)
-    return token.json()["data"]
-
-
-async def add_user_firebase(email, password):
-    """Add user to firebase and return uid."""
-    logging.info("Creating user: %s password: %s in firebase", email, password)
-    if "TESTING" in os.environ:
-        return os.environ["TEST_ID"]
-    body = {
-        "email": email,
-        "password": password
-    }
-    url = f"http://{CONFIGURATION.auth.host}/auth"
-    logging.info("Creating user in auth service: %s", url)
-    res = await httpx.AsyncClient().post(url, json=body)
-    if res.status_code != 200:
-        error = res.json()
-        logging.error("Error when trying to authenticate: %s", error)
-        raise HTTPException(status_code=res.status_code, detail=error)
-
-
-async def token_login_firebase(request: Request, role: str,
-                               session: Session):
-    """Log in with token in request header."""
-    req = await request.json()
-    if "TESTING" in os.environ:
-        if os.environ["TOKEN_ID"] != os.environ["TEST_ID"]:
-            raise HTTPException(status_code=400, detail="Error logging in")
-        return {
-            "token": "test_token",
-            "id": os.environ["TOKEN_ID"]
-        }
-    url = f"http://{CONFIGURATION.auth.host}/auth/tokenLogin"
-    logging.info("Logging user with token in auth service: %s", url)
-    auth_header = get_auth_header(request)
-    if auth_header is not None:
-        logging.info("Using auth header: %s...", auth_header)
-        res = await httpx.AsyncClient().post(url, json=req,
-                                             headers=auth_header)
-        if res.status_code != 200:
-            error = res.json()["Message"]
-            logging.error("Error when trying to login with token: %s", error)
-            raise HTTPException(status_code=res.status_code, detail=error)
-        return res.json()
-    return await regular_login_firebase(req, role, session)
-
-
-async def regular_login_firebase(body, role, session: Session):
-    """Log in with provided body and return token with proper role."""
-    url = f"http://{CONFIGURATION.auth.host}/auth/login"
-    logging.info("Logging 'regular' user in auth service: %s", url)
-    res = await httpx.AsyncClient().post(url, json=body)
-    if res.status_code != 200:
-        error = res.json()["Message"]
-        logging.error("Error when trying to login user: %s", error)
-        raise HTTPException(status_code=res.status_code, detail=error)
-    try:
-        with session as open_session:
-            email = body["email"]
-        user = get_user_by_email(open_session, email=email)
-        if role == "admin":
-            user = get_admin_by_email(open_session, email=email)
-        return {"token": await get_token(role, user.id), "id": user.id}
-    except Exception as json_exception:
-        msg = "Login error"
-        logging.exception("Error when trying to login user.")
-        raise HTTPException(status_code=400, detail=msg) from json_exception
 
 
 # Endpoint definition
@@ -258,7 +146,7 @@ async def validate_idp_token(request: Request):
                                          headers=auth_header)
     if res.status_code != 200:
         error = res.json()["Message"]
-        logging.error("Error when trying to login with token: %s", error)
+        logging.error("Error when trying to login with IDP token: %s", error)
         raise HTTPException(status_code=res.status_code, detail=error)
 
 
@@ -394,6 +282,58 @@ async def password_recovery(username: str, session: Session = Depends(get_db)):
         logging.error("Error when recovering password: %s", error)
         raise HTTPException(status_code=res.status_code, detail=error)
     return JSONResponse(content={}, status_code=200)
+
+
+@app.get("/users/{user_id}/followed/")
+async def get_followed_users(
+    user_id: int,
+    session: Session = Depends(get_db)
+):
+    """Retrieve all users followed by user with specified id."""
+    with session as open_session:
+        db_user = get_user_by_id(open_session, user_id=user_id)
+        if db_user is None:
+            raise HTTPException(status_code=404, detail="User not found")
+    return get_users_followed_by(session, user_id)
+
+
+@app.delete("/users/{user_id}/followed/{_id}")
+async def stop_following_user(
+    request: Request,
+    _id: int,
+    user_id: int,
+    session: Session = Depends(get_db)
+):
+    """Retrieve all users followed by user with specified id."""
+    with session as open_session:
+        db_user = get_user_by_id(open_session, user_id=user_id)
+        if db_user is None:
+            raise HTTPException(status_code=404, detail="User not found")
+    token = await get_credentials(request)
+    if token["id"] != user_id:
+        raise HTTPException(status_code=403, detail="Invalid credentials")
+    return unfollow_user(session, user_id, _id)
+
+
+@app.post("/users/{user_id}/followed/{_id}")
+async def follow_user(
+    request: Request,
+    _id: int,
+    user_id: int,
+    session: Session = Depends(get_db)
+):
+    """Retrieve all users followed by user with specified id."""
+    with session as open_session:
+        db_user = get_user_by_id(open_session, user_id=user_id)
+    if db_user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    token = await get_credentials(request)
+    if token["id"] != user_id:
+        raise HTTPException(status_code=403, detail="Invalid credentials")
+    if _id == user_id:
+        msg = "User can't follow himself"
+        raise HTTPException(status_code=400, detail=msg)
+    return follow_new_user(session, user_id, _id)
 
 
 # Admin endpoints. Maybe move to their own module.
