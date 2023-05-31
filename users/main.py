@@ -22,7 +22,12 @@ from users.crud import (
     get_all_users,
     get_user_by_id,
     get_user_by_username,
-    update_user, change_blocked_status, get_user_by_email
+    update_user,
+    change_blocked_status,
+    get_user_by_email,
+    get_users_followed_by,
+    unfollow_user,
+    follow_new_user
 )
 from users.schemas import UserCreate, UserUpdate, UserBase
 from users.models import Base
@@ -277,6 +282,58 @@ async def password_recovery(username: str, session: Session = Depends(get_db)):
         logging.error("Error when recovering password: %s", error)
         raise HTTPException(status_code=res.status_code, detail=error)
     return JSONResponse(content={}, status_code=200)
+
+
+@app.get("/users/{user_id}/followed/")
+async def get_followed_users(
+    user_id: int,
+    session: Session = Depends(get_db)
+):
+    """Retrieve all users followed by user with specified id."""
+    with session as open_session:
+        db_user = get_user_by_id(open_session, user_id=user_id)
+        if db_user is None:
+            raise HTTPException(status_code=404, detail="User not found")
+    return get_users_followed_by(session, user_id)
+
+
+@app.delete("/users/{user_id}/followed/{_id}")
+async def stop_following_user(
+    request: Request,
+    _id: int,
+    user_id: int,
+    session: Session = Depends(get_db)
+):
+    """Retrieve all users followed by user with specified id."""
+    with session as open_session:
+        db_user = get_user_by_id(open_session, user_id=user_id)
+        if db_user is None:
+            raise HTTPException(status_code=404, detail="User not found")
+    token = await get_credentials(request)
+    if token["id"] != user_id:
+        raise HTTPException(status_code=403, detail="Invalid credentials")
+    return unfollow_user(session, user_id, _id)
+
+
+@app.post("/users/{user_id}/followed/{_id}")
+async def follow_user(
+    request: Request,
+    _id: int,
+    user_id: int,
+    session: Session = Depends(get_db)
+):
+    """Retrieve all users followed by user with specified id."""
+    with session as open_session:
+        db_user = get_user_by_id(open_session, user_id=user_id)
+    if db_user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    token = await get_credentials(request)
+    if token["id"] != user_id:
+        raise HTTPException(status_code=403, detail="Invalid credentials")
+    if _id == user_id:
+        msg = "User can't follow himself"
+        raise HTTPException(status_code=400, detail=msg)
+    return follow_new_user(session, user_id, _id)
 
 
 # Admin endpoints. Maybe move to their own module.
