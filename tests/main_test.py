@@ -9,7 +9,7 @@ from sqlalchemy.orm import sessionmaker
 
 from tests.testing_constants import user_1, user_2, user_3, \
     user_to_update, user_template_no_email, private_keys
-from users.main import app, get_db
+from users.main import DOCUMENTATION_URI, app, get_db
 from users.models import Base
 
 SQLALCHEMY_DATABASE_URL = "sqlite:///./tests/test.db"
@@ -384,3 +384,13 @@ def test_pagination_with_ten_users_and_three_pages_correct_values(add_mock,
             correct_values = {"total": 10, "page": 1 + idx,
                               "size": 10 % 3, "pages": 4}
         assert equal_dicts(response.json(), correct_values, {"items"})
+
+
+def test_when_getting_swagger_ui_expect_200():
+    response = client.get(DOCUMENTATION_URI)
+    assert response.status_code == 200, response.json()
+
+
+def test_when_getting_openapi_doc_expect_200():
+    response = client.get(DOCUMENTATION_URI + "openapi.json")
+    assert response.status_code == 200, response.json()
