@@ -1,6 +1,7 @@
 # pylint: disable= missing-module-docstring, missing-function-docstring
 # pylint: disable= unused-argument, redefined-outer-name
 from unittest.mock import patch
+from hamcrest import assert_that, greater_than
 
 import pytest
 from fastapi.testclient import TestClient
@@ -384,6 +385,12 @@ def test_pagination_with_ten_users_and_three_pages_correct_values(add_mock,
             correct_values = {"total": 10, "page": 1 + idx,
                               "size": 10 % 3, "pages": 4}
         assert equal_dicts(response.json(), correct_values, {"items"})
+
+
+def test_when_checking_healthcheck_expect_uptime_greater_than_zero():
+    response = client.get("/users/healthcheck/")
+    assert response.status_code == 200, response.json()
+    assert_that(response.json()["uptime"], greater_than(0))
 
 
 def test_when_getting_swagger_ui_expect_200():

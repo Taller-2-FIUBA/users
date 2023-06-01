@@ -1,6 +1,7 @@
 """Define all endpoints here."""
 import logging
 import os
+import time
 from typing import Optional
 import sentry_sdk
 import httpx
@@ -36,10 +37,12 @@ from users.admin.dao import create_admin, get_all as get_all_admins
 from users.admin.dto import AdminCreationDTO
 from users.util import get_auth_header, \
     get_credentials, get_token, add_user_firebase, token_login_firebase
+from users.healthcheck import HealthCheckDto
 
 BASE_URI = "/users"
 CONFIGURATION = to_config(AppConfig)
 DOCUMENTATION_URI = BASE_URI + "/documentation/"
+START = time.time()
 
 if CONFIGURATION.sentry.enabled:
     sentry_sdk.init(dsn=CONFIGURATION.sentry.dsn, traces_sample_rate=0.5)
@@ -382,6 +385,12 @@ async def admin_login(request: Request, session: Session = Depends(get_db)):
     m.REQUEST_COUNTER.labels("/admins/login", "post").inc()
     body = await token_login_firebase(request, "admin", session)
     return JSONResponse(content=body, status_code=200)
+
+
+@app.get(BASE_URI + "/healthcheck/")
+async def health_check() -> HealthCheckDto:
+    """Check for how long has the service been running."""
+    return HealthCheckDto(uptime=time.time() - START)
 
 
 @app.get(DOCUMENTATION_URI, include_in_schema=False)
