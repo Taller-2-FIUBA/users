@@ -9,6 +9,7 @@ import httpx
 from fastapi import FastAPI, HTTPException, Depends, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.applications import get_swagger_ui_html
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 from environ import to_config
@@ -36,13 +37,18 @@ from users.admin.dto import AdminCreationDTO
 from users.util import get_auth_header, \
     get_credentials, get_token, add_user_firebase, token_login_firebase
 
+BASE_URI = "/users"
 CONFIGURATION = to_config(AppConfig)
+DOCUMENTATION_URI = BASE_URI + "/documentation/"
 
 if CONFIGURATION.sentry.enabled:
     sentry_sdk.init(dsn=CONFIGURATION.sentry.dsn, traces_sample_rate=0.5)
 
 logging.basicConfig(encoding="utf-8", level=CONFIGURATION.log_level.upper())
-app = FastAPI()
+app = FastAPI(
+    debug=CONFIGURATION.log_level.upper() == "DEBUG",
+    openapi_url=DOCUMENTATION_URI + "openapi.json",
+)
 
 METHODS = [
     "GET",
@@ -376,3 +382,14 @@ async def admin_login(request: Request, session: Session = Depends(get_db)):
     m.REQUEST_COUNTER.labels("/admins/login", "post").inc()
     body = await token_login_firebase(request, "admin", session)
     return JSONResponse(content=body, status_code=200)
+
+
+@app.get(DOCUMENTATION_URI, include_in_schema=False)
+async def custom_swagger_ui_html(req: Request):
+    """To show Swagger with API documentation."""
+    root_path = req.scope.get("root_path", "").rstrip("/")
+    openapi_url = root_path + app.openapi_url
+    return get_swagger_ui_html(
+        openapi_url=openapi_url,
+        title="FIUFIT users",
+    )
