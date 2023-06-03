@@ -6,7 +6,6 @@ from typing import Optional
 import sentry_sdk
 import httpx
 
-
 from fastapi import FastAPI, HTTPException, Depends, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -29,14 +28,14 @@ from users.crud import (
     get_user_by_email,
     get_users_followed_by,
     unfollow_user,
-    follow_new_user
+    follow_new_user, get_wallet_details, get_followers
 )
 from users.schemas import UserCreate, UserUpdate, UserBase
 from users.models import Base
 from users.admin.dao import create_admin, get_all as get_all_admins
 from users.admin.dto import AdminCreationDTO
-from users.util import get_auth_header, \
-    get_credentials, get_token, add_user_firebase, token_login_firebase
+from users.util import get_auth_header, get_credentials, \
+    get_token, add_user_firebase, token_login_firebase, create_wallet
 from users.healthcheck import HealthCheckDto
 
 BASE_URI = "/users"
@@ -136,9 +135,11 @@ async def create(new_user: UserCreate, session: Session = Depends(get_db)):
         )
         raise HTTPException(detail=msg, status_code=400)
     validate_user(session, new_user)
+    wallet = await create_wallet()
     await add_user_firebase(new_user.email, new_user.password)
     logging.debug("Creating user in DB...")
-    return create_user(session=session, user=new_user)
+    db_user = create_user(session=session, user=new_user, wallet=wallet)
+    return db_user
 
 
 async def validate_idp_token(request: Request):
@@ -170,8 +171,10 @@ async def create_idp_user(request: Request,
         raise HTTPException(detail=msg, status_code=400)
     validate_user(session, user)
     await validate_idp_token(request)
-    logging.debug("Creating user in DB...")
-    return create_user(session=session, user=user)
+    wallet = await create_wallet()
+    logging.debug("Creating IDP user in DB...")
+    db_user = create_user(session=session, user=user, wallet=wallet)
+    return db_user
 
 
 @app.post("/users/login/usersIDP")
@@ -208,6 +211,69 @@ async def get_one(
     if db_user is None:
         raise HTTPException(status_code=404, detail="User not found")
     return db_user
+
+
+@app.get("/users/{user_id}/wallet/")
+async def get_user_wallet(
+    request: Request,
+    user_id: int,
+    session: Session = Depends(get_db)
+):
+    """Retrieve wallet for users with specified id."""
+    logging.info("Getting wallet belonging to user %d ...", user_id)
+    m.REQUEST_COUNTER.labels("/users/{user_id}/wallet/", "get").inc()
+    token = await get_credentials(request)
+    if token["role"] != "user" or token["id"] != user_id:
+        logging.warning("Invalid wallet access for user %d", user_id)
+        raise HTTPException(status_code=403, detail="Invalid credentials")
+    with session as open_session:
+        wallet = get_wallet_details(open_session, user_id=user_id)
+        if wallet.user_id != token["id"]:
+            logging.warning("Invalid wallet access for user %d", user_id)
+            raise HTTPException(status_code=403, detail="Invalid credentials")
+        body = {
+            "address": wallet.address,
+            "private_key": wallet.private_key
+        }
+    return JSONResponse(content=body, status_code=200)
+
+
+async def deposit_money(send_wallet, recv_wallet, amount):
+    """Make deposit through payment service."""
+    logging.info("Sending money from %s to %s",
+                 send_wallet.address, recv_wallet.address)
+    body = {
+        "senderKey": send_wallet.private_key,
+        "receiverKey": recv_wallet.private_key,
+        "amountInEthers": str(amount)
+    }
+    url = f"http://{CONFIGURATION.payments.host}/payment/deposit"
+    res = await httpx.AsyncClient().post(url, json=body)
+    if res.status_code != 200:
+        error = res.json()
+        logging.error("Error when trying to make deposit: %s", error)
+        raise HTTPException(status_code=res.status_code, detail=error)
+    return res.json()
+
+
+@app.post("/users/deposit")
+async def make_payment(
+    request: Request,
+    session: Session = Depends(get_db)
+):
+    """Transfer specified money amount between specified users."""
+    req = await request.json()
+    receiver_id = req["receiver_id"]
+    sender_id = req["sender_id"]
+    amount = req["amount"]
+    token = await get_credentials(request)
+    if token["id"] != sender_id or token["role"] != "user":
+        logging.warning("Invalid wallet access for user %d", sender_id)
+        raise HTTPException(status_code=403, detail="Invalid credentials")
+    with session as open_session:
+        sender_wallet = get_wallet_details(open_session, user_id=sender_id)
+        receiver_wallet = get_wallet_details(open_session, user_id=receiver_id)
+        return await deposit_money(sender_wallet, receiver_wallet, amount)
 
 
 @app.patch("/users/status/{_id}")
@@ -293,17 +359,34 @@ async def password_recovery(username: str, session: Session = Depends(get_db)):
     return JSONResponse(content={}, status_code=200)
 
 
-@app.get("/users/{user_id}/followed/")
+@app.get("/users/{user_id}/followed")
 async def get_followed_users(
     user_id: int,
     session: Session = Depends(get_db)
 ):
     """Retrieve all users followed by user with specified id."""
+    logging.info("Getting followed users for user %s...", user_id)
+    m.REQUEST_COUNTER.labels("//users/{user_id}/followed", "get").inc()
     with session as open_session:
         db_user = get_user_by_id(open_session, user_id=user_id)
         if db_user is None:
             raise HTTPException(status_code=404, detail="User not found")
     return get_users_followed_by(session, user_id)
+
+
+@app.get("/users/{user_id}/followers")
+async def get_user_followers(
+    user_id: int,
+    session: Session = Depends(get_db)
+):
+    """Retrieve all users followed by user with specified id."""
+    logging.info("Getting followers for user %s...", user_id)
+    m.REQUEST_COUNTER.labels("//users/{user_id}/followers", "get").inc()
+    with session as open_session:
+        db_user = get_user_by_id(open_session, user_id=user_id)
+        if db_user is None:
+            raise HTTPException(status_code=404, detail="User not found")
+    return get_followers(session, user_id)
 
 
 @app.delete("/users/{user_id}/followed/{_id}")

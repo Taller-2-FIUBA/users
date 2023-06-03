@@ -9,7 +9,6 @@ from users.admin.dao import get_admin_by_email
 from users.config import AppConfig
 from users.crud import get_user_by_email
 
-
 CONFIGURATION = to_config(AppConfig)
 
 
@@ -112,3 +111,15 @@ async def regular_login_firebase(body, role, session: Session):
         logging.error("Error when trying to login user: %s", error)
         raise HTTPException(status_code=res.status_code, detail=error)
     return {"token": await get_token(role, user.id), "id": user.id}
+
+
+async def create_wallet():
+    """Create wallet through payment services."""
+    logging.info("Creating wallet for new user")
+    url = f"http://{CONFIGURATION.payments.host}/payment/wallet"
+    res = await httpx.AsyncClient().post(url)
+    if res.status_code != 200:
+        error = res.json()
+        logging.error("Error when trying to create wallet: %s", error)
+        raise HTTPException(status_code=res.status_code, detail=error)
+    return res.json()

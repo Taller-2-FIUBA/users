@@ -16,7 +16,7 @@ class AppConfig:
         driver = var("postgresql")
         password = var("postgres")
         user = var("postgres")
-        host = var("user_db")
+        host = "localhost"
         port = var(5432, converter=int)
         database = var("postgres")
 
@@ -24,7 +24,13 @@ class AppConfig:
     class AUTH:
         """Authentication service configuration."""
 
-        host = var("auth-svc")
+        host = "localhost:8002"
+
+    @config
+    class PAYMENTS:
+        """Payment service configuration."""
+
+        host = "localhost:8020"
 
     @config(prefix="SENTRY")
     class Sentry:
@@ -34,5 +40,6 @@ class AppConfig:
         dsn = var("https://token@sentry.ingest.localhost")
 
     db = group(DB)  # type: ignore
+    payments = group(PAYMENTS)  # type: ignore
     auth = group(AUTH)  # type: ignore
     sentry = group(Sentry)

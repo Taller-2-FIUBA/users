@@ -32,6 +32,15 @@ class FollowedUsers(Base):
     followed_id = Column(Integer, ForeignKey("users.id"), primary_key=True)
 
 
+class UsersWallets(Base):
+    """Table structure for user."""
+
+    __tablename__ = "usersWallets"
+    user_id = Column(Integer, ForeignKey("users.id"), primary_key=True)
+    address = Column(String)
+    private_key = Column(String)
+
+
 class Admin(Base):
     """Table structure for admin."""
 

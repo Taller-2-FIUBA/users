@@ -79,3 +79,8 @@ user_template_no_email = {
     "registration_date": "23-3-2023",
     "is_athlete": True
 }
+
+test_wallet = {
+    "address": "test_address",
+    "privateKey": "test_key"
+}

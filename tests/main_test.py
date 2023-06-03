@@ -9,7 +9,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from tests.testing_constants import user_1, user_2, user_3, \
-    user_to_update, user_template_no_email, private_keys
+    user_to_update, user_template_no_email, private_keys, test_wallet
 from users.main import DOCUMENTATION_URI, app, get_db
 from users.models import Base
 
@@ -58,17 +58,21 @@ def equal_dicts(dict1, dict2, ignore_keys):
     return d1_filtered == d2_filtered
 
 
+@patch('users.main.create_wallet')
 @patch('users.main.add_user_firebase')
-def test_user_stored_correctly(add_mock, test_db):
+def test_user_stored_correctly(add_mock, create_wallet, test_db):
     add_mock.return_value = None
+    create_wallet.return_value = test_wallet
     response = client.post("users", json=user_1)
     assert response.status_code == 200
     assert equal_dicts(response.json(), user_1, ignored_keys)
 
 
+@patch('users.main.create_wallet')
 @patch('users.main.add_user_firebase')
-def test_several_users_stored_correctly(add_mock, test_db):
+def test_several_users_stored_correctly(add_mock, create_wallet, test_db):
     add_mock.return_value = None
+    create_wallet.return_value = test_wallet
     response1 = client.post("users", json=user_1)
     response2 = client.post("users", json=user_2)
     assert response1.status_code == 200
@@ -77,9 +81,13 @@ def test_several_users_stored_correctly(add_mock, test_db):
     assert equal_dicts(response2.json(), user_2, ignored_keys)
 
 
+@patch('users.main.create_wallet')
 @patch('users.main.add_user_firebase')
-def test_user_that_wasnt_stored_isnt_retrieved(add_mock, test_db):
+def test_user_that_wasnt_stored_isnt_retrieved(add_mock,
+                                               create_wallet,
+                                               test_db):
     add_mock.return_value = None
+    create_wallet.return_value = test_wallet
     client.post("users", json=user_1)
     client.post("users", json=user_2)
     response = client.get("users/")
@@ -90,9 +98,11 @@ def test_user_that_wasnt_stored_isnt_retrieved(add_mock, test_db):
     assert (equal_dicts(user2, user_3, ignored_keys)) is False
 
 
+@patch('users.main.create_wallet')
 @patch('users.main.add_user_firebase')
-def test_can_get_several_user_details(add_mock, test_db):
+def test_can_get_several_user_details(add_mock, create_wallet, test_db):
     add_mock.return_value = None
+    create_wallet.return_value = test_wallet
     client.post("users", json=user_1)
     client.post("users", json=user_2)
     client.post("users", json=user_3)
@@ -102,10 +112,13 @@ def test_can_get_several_user_details(add_mock, test_db):
     assert equal_dicts(response.json()["items"][2], user_3, ignored_keys)
 
 
+@patch('users.main.create_wallet')
 @patch('users.main.get_credentials')
 @patch('users.main.add_user_firebase')
-def test_can_retrieve_user_with_his_id(add_mock, creds_mock, test_db):
+def test_can_retrieve_user_with_his_id(add_mock, creds_mock,
+                                       create_wallet, test_db):
     add_mock.return_value = None
+    create_wallet.return_value = test_wallet
     response1 = client.post("users", json=user_1)
     creds_mock.return_value = {"id": 1,
                                "role": "admin"}
@@ -115,9 +128,12 @@ def test_can_retrieve_user_with_his_id(add_mock, creds_mock, test_db):
 
 
 @patch('users.main.get_credentials')
+@patch('users.main.create_wallet')
 @patch('users.main.add_user_firebase')
-def test_cannot_retrieve_user_with_wrong_id(add_mock, creds_mock, test_db):
+def test_cannot_retrieve_user_with_wrong_id(add_mock, create_wallet,
+                                            creds_mock, test_db):
     add_mock.return_value = None
+    create_wallet.return_value = test_wallet
     client.post("users", json=user_1)
     creds_mock.return_value = {"id": 2,
                                "role": "admin"}
@@ -127,9 +143,12 @@ def test_cannot_retrieve_user_with_wrong_id(add_mock, creds_mock, test_db):
 
 
 @patch('users.main.token_login_firebase')
+@patch('users.main.create_wallet')
 @patch('users.main.add_user_firebase')
-def test_existing_user_logs_in_correctly(add_mock, login_mock, test_db):
+def test_existing_user_logs_in_correctly(add_mock, create_wallet,
+                                         login_mock, test_db):
     add_mock.return_value = None
+    create_wallet.return_value = test_wallet
     client.post("users", json=user_2)
     request = {"email": user_2["email"], "password": user_2["password"]}
     login_mock.return_value = {
@@ -141,10 +160,12 @@ def test_existing_user_logs_in_correctly(add_mock, login_mock, test_db):
 
 
 @patch('users.util.get_user_by_email')
+@patch('users.main.create_wallet')
 @patch('users.main.add_user_firebase')
-def test_non_existing_user_raises_exception_at_login(add_mock, search_mock,
-                                                     test_db):
+def test_non_existing_user_raises_exception_at_login(add_mock, create_wallet,
+                                                     search_mock, test_db):
     add_mock.return_value = None
+    create_wallet.return_value = test_wallet
     client.post("users", json=user_2)
     request = {"email": user_1["email"], "password": user_1["password"]}
     search_mock.return_value = None
@@ -153,9 +174,12 @@ def test_non_existing_user_raises_exception_at_login(add_mock, search_mock,
     assert response.json() == {"detail": "No such user"}
 
 
+@patch('users.main.create_wallet')
 @patch('users.main.add_user_firebase')
-def test_can_retrieve_user_with_his_username(add_mock, test_db):
+def test_can_retrieve_user_with_his_username(add_mock, create_wallet,
+                                             test_db):
     add_mock.return_value = None
+    create_wallet.return_value = test_wallet
     create_response = client.post("users", json=user_2)
     user_string = "users?username=" + create_response.json()["username"]
     get_response = client.get(user_string)
@@ -163,19 +187,26 @@ def test_can_retrieve_user_with_his_username(add_mock, test_db):
     assert equal_dicts(get_response.json(), user_2, private_keys)
 
 
+@patch('users.main.create_wallet')
 @patch('users.main.add_user_firebase')
-def test_cannot_retrieve_user_with_incorrect_username(add_mock, test_db):
+def test_cannot_retrieve_user_with_incorrect_username(add_mock, create_wallet,
+                                                      test_db):
     add_mock.return_value = None
+    create_wallet.return_value = test_wallet
     client.post("users", json=user_2)
     user_string = "users?username=" + "wrong_username"
     get_response = client.get(user_string)
     assert get_response.status_code == 404
 
 
+@patch('users.main.create_wallet')
 @patch('users.main.add_user_firebase')
-def test_can_retrieve_several_users_with_their_usernames(add_mock, test_db):
+def test_can_retrieve_several_users_with_their_usernames(add_mock,
+                                                         create_wallet,
+                                                         test_db):
     users = [user_1, user_2, user_3]
     add_mock.return_value = None
+    create_wallet.return_value = test_wallet
     for idx in range(0, 3):
         create_response = client.post("users", json=users[idx])
         user_string = "users?username=" + create_response.json()["username"]
@@ -186,9 +217,12 @@ def test_can_retrieve_several_users_with_their_usernames(add_mock, test_db):
 
 
 @patch('users.main.get_credentials')
+@patch('users.main.create_wallet')
 @patch('users.main.add_user_firebase')
-def test_when_updating_user_data_expect_data(add_mock, creds_mock, test_db):
+def test_when_updating_user_data_expect_data(add_mock, create_wallet,
+                                             creds_mock, test_db):
     add_mock.return_value = None
+    create_wallet.return_value = test_wallet
     response_post = client.post("users", json=user_to_update)
     assert response_post.status_code == 200
     creds_mock.return_value = {"id": 1,
@@ -228,12 +262,15 @@ def test_when_updating_user_data_expect_data(add_mock, creds_mock, test_db):
     )
 
 
+@patch('users.main.create_wallet')
 @patch('users.main.get_credentials')
 @patch('users.main.add_user_firebase')
 def test_when_update_height_and_weight_expect_height_and_weight(add_mock,
                                                                 cred_mock,
+                                                                create_wallet,
                                                                 test_db):
     add_mock.return_value = None
+    create_wallet.return_value = test_wallet
     response_post = client.post("users", json=user_to_update)
     assert response_post.status_code == 200
     cred_mock.return_value = {"id": 1,
@@ -277,10 +314,13 @@ def test_when_updating_non_existent_user_id_expect_not_found(creds_mock,
     assert response_patch.status_code == 404
 
 
+@patch('users.main.create_wallet')
 @patch('users.util.get_auth_header')
 @patch('users.main.add_user_firebase')
-def test_cant_change_status_without_token(add_mock, auth_mock, test_db):
+def test_cant_change_status_without_token(add_mock, auth_mock,
+                                          create_wallet, test_db):
     add_mock.return_value = None
+    create_wallet.return_value = test_wallet
     create_response = client.post("users", json=user_2)
     auth_mock.return_value = None
     user = "users/status/" + str(create_response.json()["id"])
@@ -288,10 +328,13 @@ def test_cant_change_status_without_token(add_mock, auth_mock, test_db):
     assert patch_response.status_code == 403
 
 
+@patch('users.main.create_wallet')
 @patch('users.main.get_credentials')
 @patch('users.main.add_user_firebase')
-def test_cant_change_status_as_user(add_mock, creds_mock, test_db):
+def test_cant_change_status_as_user(add_mock, creds_mock,
+                                    create_wallet, test_db):
     add_mock.return_value = None
+    create_wallet.return_value = test_wallet
     create_response = client.post("users", json=user_2)
     assert create_response.status_code == 200
     url = "users/status/" + str(create_response.json()["id"])
@@ -301,14 +344,17 @@ def test_cant_change_status_as_user(add_mock, creds_mock, test_db):
     assert patch_response.status_code == 403
 
 
+@patch('users.main.create_wallet')
 @patch('users.main.get_credentials')
 @patch('users.main.add_user_firebase')
 def test_can_change_status_to_blocked_and_back_again_as_admin(add_mock,
                                                               creds_mock,
+                                                              create_wallet,
                                                               test_db):
     blocked_user = user_1 | {"is_blocked": True}
     unblocked_user = user_1 | {"is_blocked": False}
     add_mock.return_value = None
+    create_wallet.return_value = test_wallet
     create_response = client.post("users", json=user_1)
     patch_url = "users/status/" + str(create_response.json()["id"])
     get_url = "users/" + str(create_response.json()["id"])
@@ -324,12 +370,15 @@ def test_can_change_status_to_blocked_and_back_again_as_admin(add_mock,
     assert equal_dicts(get_response.json(), unblocked_user, {"id", "password"})
 
 
+@patch('users.main.create_wallet')
 @patch('users.main.token_login_firebase')
 @patch('users.main.add_user_firebase')
-def test_default_pagination_with_ten_users_returns_correct_values(add_mock,
-                                                                  creds_mock,
-                                                                  test_db):
+def test_pagination_with_ten_users_returns_correct_values(add_mock,
+                                                          creds_mock,
+                                                          create_wallet,
+                                                          test_db):
     add_mock.return_value = None
+    create_wallet.return_value = test_wallet
     for idx in range(10):
         email = {"email": "user_" + str(idx)}
         username = {"username": "user_" + str(idx)}
@@ -343,12 +392,15 @@ def test_default_pagination_with_ten_users_returns_correct_values(add_mock,
     assert equal_dicts(response.json(), correct_values, {"items"})
 
 
+@patch('users.main.create_wallet')
 @patch('users.main.token_login_firebase')
 @patch('users.main.add_user_firebase')
 def test_pagination_with_ten_users_and_two_pages_correct_values(add_mock,
                                                                 creds_mock,
+                                                                create_wallet,
                                                                 test_db):
     add_mock.return_value = None
+    create_wallet.return_value = test_wallet
     for idx in range(10):
         email = {"email": "user_" + str(idx)}
         username = {"username": "user_" + str(idx)}
@@ -364,12 +416,15 @@ def test_pagination_with_ten_users_and_two_pages_correct_values(add_mock,
     assert equal_dicts(response.json(), correct_values, {"items"})
 
 
+@patch('users.main.create_wallet')
 @patch('users.main.token_login_firebase')
 @patch('users.main.add_user_firebase')
-def test_pagination_with_ten_users_and_three_pages_correct_values(add_mock,
-                                                                  creds_mock,
-                                                                  test_db):
+def test_pagination_with_ten_users_and_three_pages(add_mock,
+                                                   creds_mock,
+                                                   create_wallet,
+                                                   test_db):
     add_mock.return_value = None
+    create_wallet.return_value = test_wallet
     for idx in range(10):
         email = {"email": "user_" + str(idx)}
         username = {"username": "user_" + str(idx)}

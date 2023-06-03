@@ -2,11 +2,11 @@
 import math
 
 from sqlalchemy.orm import Session
-from users.models import Users, FollowedUsers
+from users.models import Users, FollowedUsers, UsersWallets
 from users.schemas import UserUpdate, UserBase
 
 
-def create_user(session: Session, user: UserBase):
+def create_user(session: Session, user: UserBase, wallet):
     """Create a new user in the users table, using the id as primary key."""
     db_user = Users(email=user.email, username=user.username,
                     name=user.name, surname=user.surname,
@@ -17,12 +17,22 @@ def create_user(session: Session, user: UserBase):
     session.add(db_user)
     session.commit()
     session.refresh(db_user)
-    return db_user
+    new_wallet = UsersWallets(user_id=db_user.id, address=wallet["address"],
+                              private_key=wallet["privateKey"])
+    session.add(new_wallet)
+    session.commit()
+    return get_user_by_email(session, user.email)
 
 
 def get_user_by_id(session: Session, user_id: int):
     """Return details from a user identified by a certain user id."""
     return session.query(Users).filter(Users.id == user_id).first()
+
+
+def get_wallet_details(session: Session, user_id: int):
+    """Return wallet address for a user identified by a certain user id."""
+    return session.query(UsersWallets) \
+        .filter(UsersWallets.user_id == user_id).first()
 
 
 def get_user_by_username(session: Session, username: str):
@@ -31,6 +41,7 @@ def get_user_by_username(session: Session, username: str):
     if user is None:
         return None
     return {
+        "id": user.id,
         "name": user.name,
         "surname": user.surname,
         "email": user.email,
@@ -79,7 +90,7 @@ def get_details_with_id(session: Session, user_id: int):
 
 
 def get_users_followed_by(session: Session, _id: int):
-    """Inverts blocked status for user with provided id."""
+    """Get all users followed by specified id."""
     vec = []
     users = session.query(FollowedUsers).filter(FollowedUsers.id == _id).all()
     for pair in users:
@@ -87,10 +98,20 @@ def get_users_followed_by(session: Session, _id: int):
     return vec
 
 
+def get_followers(session: Session, _id: int):
+    """Get all users who follow the specified id."""
+    vec = []
+    users = session.query(FollowedUsers) \
+        .filter(FollowedUsers.followed_id == _id).all()
+    for pair in users:
+        vec.append(get_user_by_id(session, pair.id))
+    return vec
+
+
 def follow_new_user(session: Session, user_id: int, _id: int):
     """Add new followed user to specified user."""
     if session.query(FollowedUsers).filter(FollowedUsers.id == user_id,
-                                           FollowedUsers.followed_id == _id)\
+                                           FollowedUsers.followed_id == _id) \
             .first() is not None:
         return get_users_followed_by(session, user_id)
     new_follow = FollowedUsers(id=user_id, followed_id=_id)
@@ -103,7 +124,7 @@ def follow_new_user(session: Session, user_id: int, _id: int):
 def unfollow_user(session: Session, user_id: int, _id: int):
     """Unfollow specified user."""
     session.query(FollowedUsers).filter(FollowedUsers.id == user_id,
-                                        FollowedUsers.followed_id == _id)\
+                                        FollowedUsers.followed_id == _id) \
         .delete()
     session.commit()
     return get_users_followed_by(session, user_id)
