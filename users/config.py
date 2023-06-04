@@ -30,7 +30,7 @@ class AppConfig:
     class PAYMENTS:
         """Payment service configuration."""
 
-        host = "localhost:8020"
+        host = var("localhost:8020")
 
     @config(prefix="SENTRY")
     class Sentry:

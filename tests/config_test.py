@@ -99,3 +99,15 @@ def test_when_sentry_dsn_is_empty_expect_localhost():
 def test_when_sentry_dsn_has_sentry_url_expect_it():
     cnf = to_config(AppConfig)
     assert cnf.sentry.dsn == "https://wf313c@24t2tg2g.ingest.sentry.io/33433"
+
+
+@patch.dict(environ, clear=True)
+def test_when_environment_payments_host_expect_localhost():
+    cnf = to_config(AppConfig)
+    assert cnf.payments.host == "localhost:8020"
+
+
+@patch.dict(environ, {"USERS_PAYMENTS_HOST": "payment-svc"}, clear=True)
+def test_when_environment_payments_host_expect_payments_svc():
+    cnf = to_config(AppConfig)
+    assert cnf.payments.host == "payment-svc"
