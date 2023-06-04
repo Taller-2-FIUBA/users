@@ -16,3 +16,4 @@ data:
   USERS_TEST_IS_TESTING: "False"
   USERS_SENTRY_ENABLED: "true"
   USERS_SENTRY_DSN: $USERS_SENTRY_DSN
+  USERS_PAYMENTS_HOST: payment-service.taller2-marianocinalli.svc.cluster.local:8020
