@@ -17,6 +17,7 @@ class UserBase(BaseModel):
     location: str
     registration_date: str
     is_athlete: bool
+    image: Optional[str]
 
 
 class UserUpdate(BaseModel):

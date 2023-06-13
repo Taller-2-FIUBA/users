@@ -35,7 +35,8 @@ from users.models import Base
 from users.admin.dao import create_admin, get_all as get_all_admins
 from users.admin.dto import AdminCreationDTO
 from users.util import get_auth_header, get_credentials, \
-    get_token, add_user_firebase, token_login_firebase, create_wallet
+    get_token, add_user_firebase, token_login_firebase, \
+    create_wallet, upload_image, download_image, get_balance
 from users.healthcheck import HealthCheckDto
 
 BASE_URI = "/users"
@@ -138,6 +139,9 @@ async def create(new_user: UserCreate, session: Session = Depends(get_db)):
     wallet = await create_wallet()
     await add_user_firebase(new_user.email, new_user.password)
     logging.debug("Creating user in DB...")
+    if new_user.image:
+        logging.info("Uploading user image...")
+        await upload_image(new_user.image, new_user.username)
     db_user = create_user(session=session, user=new_user, wallet=wallet)
     return db_user
 
@@ -213,7 +217,7 @@ async def get_one(
     return db_user
 
 
-@app.get("/users/{user_id}/wallet/")
+@app.get("/users/{user_id}/wallet")
 async def get_user_wallet(
     request: Request,
     user_id: int,
@@ -234,6 +238,31 @@ async def get_user_wallet(
         body = {
             "address": wallet.address,
             "private_key": wallet.private_key
+        }
+    return JSONResponse(content=body, status_code=200)
+
+
+@app.get("/users/{user_id}/wallet/balance")
+async def get_wallet_balance(
+    request: Request,
+    user_id: int,
+    session: Session = Depends(get_db)
+):
+    """Retrieve wallet balance for user with specified id."""
+    logging.info("Getting wallet balance belonging to user %d ...", user_id)
+    m.REQUEST_COUNTER.labels("/users/{user_id}/wallet/balance", "get").inc()
+    token = await get_credentials(request)
+    if token["role"] != "user" or token["id"] != user_id:
+        logging.warning("Invalid wallet access for user %d", user_id)
+        raise HTTPException(status_code=403, detail="Invalid credentials")
+    with session as open_session:
+        wallet = get_wallet_details(open_session, user_id=user_id)
+        if wallet is None:
+            logging.warning("Non existent wallet")
+            raise HTTPException(status_code=404, detail="Non existent wallet")
+        balance = await get_balance(wallet)
+        body = {
+            "balance": balance,
         }
     return JSONResponse(content=body, status_code=200)
 
@@ -336,6 +365,10 @@ async def get_all(
         db_user = get_user_by_username(open_session, username=username)
     if db_user is None:
         raise HTTPException(status_code=404, detail="User not found")
+    if username is not None:
+        image = await download_image(username)
+        if image:
+            db_user.update(image)
     return db_user
 
 

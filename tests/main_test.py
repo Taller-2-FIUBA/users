@@ -174,12 +174,14 @@ def test_non_existing_user_raises_exception_at_login(add_mock, create_wallet,
     assert response.json() == {"detail": "No such user"}
 
 
+@patch('users.main.download_image')
 @patch('users.main.create_wallet')
 @patch('users.main.add_user_firebase')
 def test_can_retrieve_user_with_his_username(add_mock, create_wallet,
-                                             test_db):
+                                             download_mock, test_db):
     add_mock.return_value = None
     create_wallet.return_value = test_wallet
+    download_mock.return_value = None
     create_response = client.post("users", json=user_2)
     user_string = "users?username=" + create_response.json()["username"]
     get_response = client.get(user_string)
@@ -199,14 +201,17 @@ def test_cannot_retrieve_user_with_incorrect_username(add_mock, create_wallet,
     assert get_response.status_code == 404
 
 
+@patch('users.main.download_image')
 @patch('users.main.create_wallet')
 @patch('users.main.add_user_firebase')
 def test_can_retrieve_several_users_with_their_usernames(add_mock,
                                                          create_wallet,
+                                                         download_mock,
                                                          test_db):
     users = [user_1, user_2, user_3]
     add_mock.return_value = None
     create_wallet.return_value = test_wallet
+    download_mock.return_value = None
     for idx in range(0, 3):
         create_response = client.post("users", json=users[idx])
         user_string = "users?username=" + create_response.json()["username"]

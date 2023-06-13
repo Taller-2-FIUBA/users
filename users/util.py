@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from users.admin.dao import get_admin_by_email
 from users.config import AppConfig
 from users.crud import get_user_by_email
+from users.models import UsersWallets
 
 CONFIGURATION = to_config(AppConfig)
 
@@ -122,4 +123,36 @@ async def create_wallet():
         error = res.json()
         logging.error("Error when trying to create wallet: %s", error)
         raise HTTPException(status_code=res.status_code, detail=error)
+    return res.json()
+
+
+async def upload_image(image: str, username: str):
+    """Upload image to auth service."""
+    url = f"http://{CONFIGURATION.auth.host}/auth/storage/" + username
+    body = {
+        "image": image
+    }
+    res = await httpx.AsyncClient().post(url, json=body)
+    if res.status_code != 200:
+        raise HTTPException(status_code=res.status_code,
+                            detail=res.json()["Message"])
+
+
+async def download_image(username: str):
+    """Download image from auth service."""
+    url = f"http://{CONFIGURATION.auth.host}/auth/storage/" + username
+    res = await httpx.AsyncClient().get(url)
+    if res.status_code != 200:
+        return None
+    return res.json()
+
+
+async def get_balance(wallet: UsersWallets):
+    """Get balance from wallet service."""
+    url = f"http://{CONFIGURATION.payments.host}/payment/wallet/" + \
+          wallet.address + "/balance"
+    res = await httpx.AsyncClient().get(url)
+    if res.status_code != 200:
+        raise HTTPException(status_code=res.status_code,
+                            detail="Issue retrieving wallet balance")
     return res.json()
