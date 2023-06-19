@@ -145,15 +145,19 @@ async def create(new_user: UserCreate, session: Session = Depends(get_db)):
         )
         raise HTTPException(detail=msg, status_code=400)
     validate_user(session, new_user)
-    wallet = await create_wallet()
     await add_user_firebase(new_user.email, new_user.password)
+    wallet = await create_wallet()
     logging.debug("Creating user in DB...")
     if new_user.image:
         logging.info("Uploading user image...")
         await upload_image(new_user.image, new_user.username)
     db_user = create_user(session=session, user=new_user, wallet=wallet)
     save_location(
-        MONGO_URL, db_user.is_athlete, db_user.id, new_user.coordinates
+        MONGO_URL,
+        db_user.is_athlete,
+        db_user.id,
+        new_user.coordinates,
+        CONFIGURATION
     )
     return db_user
 
@@ -190,7 +194,13 @@ async def create_idp_user(request: Request,
     wallet = await create_wallet()
     logging.debug("Creating IDP user in DB...")
     db_user = create_user(session=session, user=user, wallet=wallet)
-    save_location(MONGO_URL, db_user.is_athlete, db_user.id, user.coordinates)
+    save_location(
+        MONGO_URL,
+        db_user.is_athlete,
+        db_user.id,
+        user.coordinates,
+        CONFIGURATION
+    )
     return db_user
 
 

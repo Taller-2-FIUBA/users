@@ -24,6 +24,7 @@ class AppConfig:
     class Mongo:
         """MongoDB configuration."""
 
+        enabled = bool_var(True)
         driver = var("mongodb")
         user = var("fiufit")
         password = var("fiufit")

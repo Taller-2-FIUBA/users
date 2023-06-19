@@ -114,6 +114,18 @@ def test_when_environment_payments_host_expect_payments_svc():
 
 
 @patch.dict(environ, clear=True)
+def test_when_mongo_enabled_env_variable_is_not_set_expect_true():
+    cnf = to_config(AppConfig)
+    assert cnf.mongo.enabled
+
+
+@patch.dict(environ, {"USERS_MONGO_ENABLED": "False"}, clear=True)
+def test_when_mongo_enabled_env_variable_is_false_expect_false():
+    cnf = to_config(AppConfig)
+    assert not cnf.mongo.enabled
+
+
+@patch.dict(environ, clear=True)
 def test_when_environment_mongo_driver_expect_mongodb():
     cnf = to_config(AppConfig)
     assert cnf.mongo.driver == "mongodb"

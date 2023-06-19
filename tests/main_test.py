@@ -1,6 +1,6 @@
 # pylint: disable= missing-module-docstring, missing-function-docstring
 # pylint: disable= unused-argument, redefined-outer-name
-from unittest.mock import MagicMock, patch
+from unittest.mock import ANY, MagicMock, patch
 from hamcrest import assert_that, greater_than
 
 import pytest
@@ -77,6 +77,7 @@ def test_user_stored_correctly(
         True,
         1,
         (1.1, -2.2),
+        ANY,
     )
 
 
