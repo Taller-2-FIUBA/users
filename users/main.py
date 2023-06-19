@@ -14,6 +14,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 from environ import to_config
 from prometheus_client import start_http_server
+from users.location_helper import save_location
 
 import users.metrics as m
 from users.config import AppConfig
@@ -30,6 +31,11 @@ from users.crud import (
     unfollow_user,
     follow_new_user, get_wallet_details, get_followers
 )
+from users.mongodb import (
+    get_mongo_url,
+    get_mongodb_connection,
+    initialize,
+)
 from users.schemas import UserCreate, UserUpdate, UserBase
 from users.models import Base
 from users.admin.dao import create_admin, get_all as get_all_admins
@@ -43,6 +49,8 @@ BASE_URI = "/users"
 CONFIGURATION = to_config(AppConfig)
 DOCUMENTATION_URI = BASE_URI + "/documentation/"
 START = time.time()
+MONGO_URL = get_mongo_url(CONFIGURATION)
+
 
 if CONFIGURATION.sentry.enabled:
     sentry_sdk.init(dsn=CONFIGURATION.sentry.dsn, traces_sample_rate=0.5)
@@ -89,6 +97,7 @@ ENGINE = create_engine(get_database_url(CONFIGURATION))
 if "TESTING" not in os.environ:
     logging.info("Building database...")
     Base.metadata.create_all(bind=ENGINE)
+    initialize(get_mongodb_connection(MONGO_URL))
 
 
 # Helper methods, move somewhere else
@@ -143,6 +152,9 @@ async def create(new_user: UserCreate, session: Session = Depends(get_db)):
         logging.info("Uploading user image...")
         await upload_image(new_user.image, new_user.username)
     db_user = create_user(session=session, user=new_user, wallet=wallet)
+    save_location(
+        MONGO_URL, db_user.is_athlete, db_user.id, new_user.coordinates
+    )
     return db_user
 
 
@@ -178,6 +190,7 @@ async def create_idp_user(request: Request,
     wallet = await create_wallet()
     logging.debug("Creating IDP user in DB...")
     db_user = create_user(session=session, user=user, wallet=wallet)
+    save_location(MONGO_URL, db_user.is_athlete, db_user.id, user.coordinates)
     return db_user
 
 

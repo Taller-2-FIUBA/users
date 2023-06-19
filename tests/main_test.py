@@ -1,6 +1,6 @@
 # pylint: disable= missing-module-docstring, missing-function-docstring
 # pylint: disable= unused-argument, redefined-outer-name
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 from hamcrest import assert_that, greater_than
 
 import pytest
@@ -60,16 +60,29 @@ def equal_dicts(dict1, dict2, ignore_keys):
 
 @patch('users.main.create_wallet')
 @patch('users.main.add_user_firebase')
-def test_user_stored_correctly(add_mock, create_wallet, test_db):
+@patch('users.main.save_location')
+def test_user_stored_correctly(
+    save_location: MagicMock,
+    add_mock: MagicMock,
+    create_wallet: MagicMock,
+    test_db,
+):
     add_mock.return_value = None
     create_wallet.return_value = test_wallet
-    response = client.post("users", json=user_1)
+    response = client.post("users", json=user_1 | {"coordinates": [1.1, -2.2]})
     assert response.status_code == 200
     assert equal_dicts(response.json(), user_1, ignored_keys)
+    save_location.assert_called_once_with(
+        "mongodb://fiufit:fiufit@cluster.mongodb.net/fiufit",
+        True,
+        1,
+        (1.1, -2.2),
+    )
 
 
 @patch('users.main.create_wallet')
 @patch('users.main.add_user_firebase')
+@patch('users.main.save_location', MagicMock)
 def test_several_users_stored_correctly(add_mock, create_wallet, test_db):
     add_mock.return_value = None
     create_wallet.return_value = test_wallet
@@ -83,6 +96,7 @@ def test_several_users_stored_correctly(add_mock, create_wallet, test_db):
 
 @patch('users.main.create_wallet')
 @patch('users.main.add_user_firebase')
+@patch('users.main.save_location', MagicMock)
 def test_user_that_wasnt_stored_isnt_retrieved(add_mock,
                                                create_wallet,
                                                test_db):
@@ -100,6 +114,7 @@ def test_user_that_wasnt_stored_isnt_retrieved(add_mock,
 
 @patch('users.main.create_wallet')
 @patch('users.main.add_user_firebase')
+@patch('users.main.save_location', MagicMock)
 def test_can_get_several_user_details(add_mock, create_wallet, test_db):
     add_mock.return_value = None
     create_wallet.return_value = test_wallet
@@ -115,6 +130,7 @@ def test_can_get_several_user_details(add_mock, create_wallet, test_db):
 @patch('users.main.create_wallet')
 @patch('users.main.get_credentials')
 @patch('users.main.add_user_firebase')
+@patch('users.main.save_location', MagicMock)
 def test_can_retrieve_user_with_his_id(add_mock, creds_mock,
                                        create_wallet, test_db):
     add_mock.return_value = None
@@ -130,6 +146,7 @@ def test_can_retrieve_user_with_his_id(add_mock, creds_mock,
 @patch('users.main.get_credentials')
 @patch('users.main.create_wallet')
 @patch('users.main.add_user_firebase')
+@patch('users.main.save_location', MagicMock)
 def test_cannot_retrieve_user_with_wrong_id(add_mock, create_wallet,
                                             creds_mock, test_db):
     add_mock.return_value = None
@@ -145,6 +162,7 @@ def test_cannot_retrieve_user_with_wrong_id(add_mock, create_wallet,
 @patch('users.main.token_login_firebase')
 @patch('users.main.create_wallet')
 @patch('users.main.add_user_firebase')
+@patch('users.main.save_location', MagicMock)
 def test_existing_user_logs_in_correctly(add_mock, create_wallet,
                                          login_mock, test_db):
     add_mock.return_value = None
@@ -162,6 +180,7 @@ def test_existing_user_logs_in_correctly(add_mock, create_wallet,
 @patch('users.util.get_user_by_email')
 @patch('users.main.create_wallet')
 @patch('users.main.add_user_firebase')
+@patch('users.main.save_location', MagicMock)
 def test_non_existing_user_raises_exception_at_login(add_mock, create_wallet,
                                                      search_mock, test_db):
     add_mock.return_value = None
@@ -177,6 +196,7 @@ def test_non_existing_user_raises_exception_at_login(add_mock, create_wallet,
 @patch('users.main.download_image')
 @patch('users.main.create_wallet')
 @patch('users.main.add_user_firebase')
+@patch('users.main.save_location', MagicMock)
 def test_can_retrieve_user_with_his_username(add_mock, create_wallet,
                                              download_mock, test_db):
     add_mock.return_value = None
@@ -191,6 +211,7 @@ def test_can_retrieve_user_with_his_username(add_mock, create_wallet,
 
 @patch('users.main.create_wallet')
 @patch('users.main.add_user_firebase')
+@patch('users.main.save_location', MagicMock)
 def test_cannot_retrieve_user_with_incorrect_username(add_mock, create_wallet,
                                                       test_db):
     add_mock.return_value = None
@@ -204,6 +225,7 @@ def test_cannot_retrieve_user_with_incorrect_username(add_mock, create_wallet,
 @patch('users.main.download_image')
 @patch('users.main.create_wallet')
 @patch('users.main.add_user_firebase')
+@patch('users.main.save_location', MagicMock)
 def test_can_retrieve_several_users_with_their_usernames(add_mock,
                                                          create_wallet,
                                                          download_mock,
@@ -224,6 +246,7 @@ def test_can_retrieve_several_users_with_their_usernames(add_mock,
 @patch('users.main.get_credentials')
 @patch('users.main.create_wallet')
 @patch('users.main.add_user_firebase')
+@patch('users.main.save_location', MagicMock)
 def test_when_updating_user_data_expect_data(add_mock, create_wallet,
                                              creds_mock, test_db):
     add_mock.return_value = None
@@ -270,6 +293,7 @@ def test_when_updating_user_data_expect_data(add_mock, create_wallet,
 @patch('users.main.create_wallet')
 @patch('users.main.get_credentials')
 @patch('users.main.add_user_firebase')
+@patch('users.main.save_location', MagicMock)
 def test_when_update_height_and_weight_expect_height_and_weight(add_mock,
                                                                 cred_mock,
                                                                 create_wallet,
@@ -322,6 +346,7 @@ def test_when_updating_non_existent_user_id_expect_not_found(creds_mock,
 @patch('users.main.create_wallet')
 @patch('users.util.get_auth_header')
 @patch('users.main.add_user_firebase')
+@patch('users.main.save_location', MagicMock)
 def test_cant_change_status_without_token(add_mock, auth_mock,
                                           create_wallet, test_db):
     add_mock.return_value = None
@@ -336,6 +361,7 @@ def test_cant_change_status_without_token(add_mock, auth_mock,
 @patch('users.main.create_wallet')
 @patch('users.main.get_credentials')
 @patch('users.main.add_user_firebase')
+@patch('users.main.save_location', MagicMock)
 def test_cant_change_status_as_user(add_mock, creds_mock,
                                     create_wallet, test_db):
     add_mock.return_value = None
@@ -352,6 +378,7 @@ def test_cant_change_status_as_user(add_mock, creds_mock,
 @patch('users.main.create_wallet')
 @patch('users.main.get_credentials')
 @patch('users.main.add_user_firebase')
+@patch('users.main.save_location', MagicMock)
 def test_can_change_status_to_blocked_and_back_again_as_admin(add_mock,
                                                               creds_mock,
                                                               create_wallet,
@@ -378,6 +405,7 @@ def test_can_change_status_to_blocked_and_back_again_as_admin(add_mock,
 @patch('users.main.create_wallet')
 @patch('users.main.token_login_firebase')
 @patch('users.main.add_user_firebase')
+@patch('users.main.save_location', MagicMock)
 def test_pagination_with_ten_users_returns_correct_values(add_mock,
                                                           creds_mock,
                                                           create_wallet,
@@ -400,6 +428,7 @@ def test_pagination_with_ten_users_returns_correct_values(add_mock,
 @patch('users.main.create_wallet')
 @patch('users.main.token_login_firebase')
 @patch('users.main.add_user_firebase')
+@patch('users.main.save_location', MagicMock)
 def test_pagination_with_ten_users_and_two_pages_correct_values(add_mock,
                                                                 creds_mock,
                                                                 create_wallet,
@@ -424,6 +453,7 @@ def test_pagination_with_ten_users_and_two_pages_correct_values(add_mock,
 @patch('users.main.create_wallet')
 @patch('users.main.token_login_firebase')
 @patch('users.main.add_user_firebase')
+@patch('users.main.save_location', MagicMock)
 def test_pagination_with_ten_users_and_three_pages(add_mock,
                                                    creds_mock,
                                                    create_wallet,
