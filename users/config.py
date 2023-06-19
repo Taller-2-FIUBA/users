@@ -20,6 +20,16 @@ class AppConfig:
         port = var(5432, converter=int)
         database = var("postgres")
 
+    @config(prefix="MONGO")
+    class Mongo:
+        """MongoDB configuration."""
+
+        driver = var("mongodb")
+        user = var("fiufit")
+        password = var("fiufit")
+        host = var("cluster.mongodb.net")
+        database = var("fiufit")
+
     @config
     class AUTH:
         """Authentication service configuration."""
@@ -40,6 +50,7 @@ class AppConfig:
         dsn = var("https://token@sentry.ingest.localhost")
 
     db = group(DB)  # type: ignore
+    mongo = group(Mongo)
     payments = group(PAYMENTS)  # type: ignore
     auth = group(AUTH)  # type: ignore
     sentry = group(Sentry)
