@@ -364,11 +364,20 @@ async def patch_user(
         logging.warning("Invalid role %s", token["role"])
         raise HTTPException(status_code=403, detail="Invalid credentials")
     with session as open_session:
-        if get_user_by_id(open_session, user_id=_id) is None:
+        db_user = get_user_by_id(open_session, user_id=_id)
+        if db_user is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
             )
         update_user(session, _id, user)
+        if user.coordinates:
+            save_location(
+                MONGO_URL,
+                db_user.is_athlete,
+                _id,
+                user.coordinates,
+                CONFIGURATION,
+            )
     return JSONResponse(content={}, status_code=200)
 
 

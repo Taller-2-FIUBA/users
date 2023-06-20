@@ -8,8 +8,16 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from tests.testing_constants import user_1, user_2, user_3, \
-    user_to_update, user_template_no_email, private_keys, test_wallet
+from tests.testing_constants import (
+    user_1,
+    user_2,
+    user_3,
+    user_to_update,
+    user_template_no_email,
+    private_keys,
+    test_wallet,
+    user_to_update_location,
+)
 from users.main import DOCUMENTATION_URI, app, get_db
 from users.models import Base
 
@@ -247,15 +255,23 @@ def test_can_retrieve_several_users_with_their_usernames(add_mock,
 @patch('users.main.get_credentials')
 @patch('users.main.create_wallet')
 @patch('users.main.add_user_firebase')
-@patch('users.main.save_location', MagicMock)
-def test_when_updating_user_data_expect_data(add_mock, create_wallet,
-                                             creds_mock, test_db):
+@patch('users.main.save_location')
+def test_when_updating_user_data_expect_data(
+    save_location_mock: MagicMock,
+    add_mock,
+    create_wallet,
+    creds_mock,
+    test_db,
+):
+    # Create user
     add_mock.return_value = None
     create_wallet.return_value = test_wallet
     response_post = client.post("users", json=user_to_update)
     assert response_post.status_code == 200
-    creds_mock.return_value = {"id": 1,
-                               "role": "user"}
+    save_location_mock.assert_called_once()
+    # Edit user
+    save_location_mock.reset_mock()
+    creds_mock.return_value = {"id": 1, "role": "user"}
     response_patch = client.patch(
         "users/" + str(response_post.json()["id"]),
         json={
@@ -266,10 +282,19 @@ def test_when_updating_user_data_expect_data(add_mock, create_wallet,
             "weight": 100,
             "birth_date": "23-6-2000",
             "location": "Place, AnotherPlace",
+            "coordinates": [-1, -1]
         }
     )
     assert response_patch.status_code == 200
     assert response_patch.json() == {}
+    save_location_mock.assert_called_once_with(
+        "mongodb://fiufit:fiufit@cluster.mongodb.net/fiufit",
+        True,
+        response_post.json()["id"],
+        (-1, -1),
+        ANY,
+    )
+    # Validate user
     user = "users/" + str(response_post.json()["id"])
     response_get = client.get(user)
     assert response_get.status_code == 200
@@ -288,6 +313,44 @@ def test_when_updating_user_data_expect_data(add_mock, create_wallet,
             "is_athlete": True
         },
         {"id", "is_blocked"}
+    )
+
+
+@patch('users.main.get_credentials')
+@patch('users.main.create_wallet')
+@patch('users.main.add_user_firebase')
+@patch('users.main.save_location')
+def test_when_updating_location_but_not_coordinates_expect_no_call(
+    save_location_mock: MagicMock,
+    add_mock,
+    create_wallet,
+    creds_mock,
+    test_db,
+):
+    # Create user
+    add_mock.return_value = None
+    create_wallet.return_value = test_wallet
+    response_post = client.post("users", json=user_to_update_location)
+    assert response_post.status_code == 200
+    save_location_mock.assert_called_once()
+    # Edit user
+    save_location_mock.reset_mock()
+    creds_mock.return_value = {"id": 1, "role": "user"}
+    response_patch = client.patch(
+        "users/" + str(response_post.json()["id"]),
+        json={"location": "new_location"}
+    )
+    assert response_patch.status_code == 200
+    assert response_patch.json() == {}
+    save_location_mock.assert_not_called()
+    # Validate user
+    user = "users/" + str(response_post.json()["id"])
+    response_get = client.get(user)
+    assert response_get.status_code == 200
+    assert equal_dicts(
+        response_get.json(),
+        user_to_update_location | {"location": "new_location"},
+        {"id", "is_blocked", "password"}
     )
 
 

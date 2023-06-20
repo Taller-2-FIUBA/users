@@ -1,9 +1,12 @@
 """Handles CRUD database operations."""
 import math
+import logging
 
 from sqlalchemy.orm import Session
 from users.models import Users, FollowedUsers, UsersWallets
 from users.schemas import UserUpdate, UserBase
+
+BANNED_FIELDS_FOR_UPDATE = ["coordinates"]
 
 
 def create_user(session: Session, user: UserBase, wallet):
@@ -75,8 +78,10 @@ def change_blocked_status(session: Session, user_id: int):
 def update_user(session: Session, _id: int, user: UserUpdate):
     """Update an existing user."""
     columns_to_update = {
-        col: value for col, value in user.__dict__.items() if value is not None
+        col: value for col, value in user.__dict__.items() if
+        value is not None and col not in BANNED_FIELDS_FOR_UPDATE
     }
+    logging.debug("Updating %s", columns_to_update)
     session.query(Users) \
         .filter(Users.id == _id) \
         .update(values=columns_to_update)

@@ -28,17 +28,6 @@ def get_mongodb_connection(connection_string: str) -> MongoClient:
     return client
 
 
-def add_location(
-    connection: MongoClient,
-    user_id: int,
-    location: Tuple[float, float]
-):
-    """Create location for a user."""
-    document = {USER_ID_KEY: user_id, LOCATION_KEY: location}
-    logging.info("Creating location %s", document)
-    connection.fiufit.user_location.insert_one(document)
-
-
 def edit_location(
     connection: MongoClient, user_id: int, location: Tuple[float, float]
 ):
@@ -46,7 +35,9 @@ def edit_location(
     user_filter = {USER_ID_KEY: user_id}
     document = {USER_ID_KEY: user_id, LOCATION_KEY: location}
     logging.info("Updating location %s", document)
-    connection.fiufit.user_location.replace_one(user_filter, document, True)
+    connection.fiufit.user_location.replace_one(
+        user_filter, document, upsert=True
+    )
 
 
 def get_users_within(

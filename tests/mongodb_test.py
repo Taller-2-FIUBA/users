@@ -5,7 +5,6 @@ from bson import SON
 from pymongo import GEO2D
 
 from users.mongodb import (
-    add_location,
     edit_location,
     get_mongo_url,
     get_mongodb_connection,
@@ -41,15 +40,6 @@ def test_when_creating_connection_expect_call(expected_connection: MagicMock):
     expected_connection.assert_called_once_with("connection_string")
 
 
-def test_when_adding_location_expect_calls():
-    insert_one = MagicMock()
-    connection = MagicMock(**{
-        "fiufit.user_location.insert_one": insert_one
-    })
-    add_location(connection, 1, (1.1, 1.2))
-    insert_one.assert_called_once_with({"user_id": 1, "location": (1.1, 1.2)})
-
-
 def test_when_editing_location_expect_calls():
     replace_one = MagicMock()
     connection = MagicMock(**{
@@ -59,7 +49,7 @@ def test_when_editing_location_expect_calls():
     expected_document = {"user_id": 1, "location": (1.1, 1.2)}
     edit_location(connection, 1, (1.1, 1.2))
     replace_one.assert_called_once_with(
-        expected_filter, expected_document, True
+        expected_filter, expected_document, upsert=True
     )
 
 
