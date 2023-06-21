@@ -14,7 +14,6 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 from environ import to_config
 from prometheus_client import start_http_server
-from users.location_helper import save_location
 
 import users.metrics as m
 from users.config import AppConfig
@@ -24,6 +23,7 @@ from users.crud import (
     get_all_users,
     get_user_by_id,
     get_user_by_username,
+    get_users_by_id,
     update_user,
     change_blocked_status,
     get_user_by_email,
@@ -34,6 +34,7 @@ from users.crud import (
 from users.mongodb import (
     get_mongo_url,
     get_mongodb_connection,
+    get_users_within,
     initialize,
 )
 from users.schemas import UserCreate, UserUpdate, UserBase
@@ -44,6 +45,11 @@ from users.util import get_auth_header, get_credentials, \
     get_token, add_user_firebase, token_login_firebase, \
     create_wallet, upload_image, download_image, get_balance
 from users.healthcheck import HealthCheckDto
+from users.location_helper import (
+    get_coordinates,
+    get_user_ids,
+    save_location,
+)
 
 BASE_URI = "/users"
 CONFIGURATION = to_config(AppConfig)
@@ -381,19 +387,44 @@ async def patch_user(
     return JSONResponse(content={}, status_code=200)
 
 
+# pylint: disable=too-many-arguments
 @app.get("/users")
 async def get_all(
     username: Optional[str] = None,
+    latitude: Optional[float] = None,
+    longitude: Optional[float] = None,
+    radius: Optional[int] = 1000,
     offset: Optional[int] = 0,
     limit: Optional[int] = 10,
-    session: Session = Depends(get_db)
+    session: Session = Depends(get_db),
 ):
-    """Retrieve details for all users currently present in the database."""
-    logging.info("Retrieving users...")
-    m.REQUEST_COUNTER.labels("/users", "patch").inc()
+    """Retrieve details for all users matching a search criteria."""
+    logging.info(
+        "Retrieving users, using filters: username='%s' latitude='%s' "
+        "longitude='%s' radius='%s' offset='%s' limit='%s'",
+        username, latitude, longitude, radius, offset, limit
+    )
+    m.REQUEST_COUNTER.labels("/users", "get").inc()
+    coordinates = get_coordinates(longitude, latitude)
+    if username and coordinates:
+        raise HTTPException(
+            status_code=status.HTTP_406_NOT_ACCEPTABLE,
+            detail="Can't search by username and location. Use only one."
+        )
     with session as open_session:
-        if username is None:
+        if username is None and coordinates is None:
+            logging.info("Retrieving all users...")
             return get_all_users(open_session, limit=limit, offset=offset)
+        if coordinates:
+            user_ids = get_users_within(
+                get_mongodb_connection(MONGO_URL), coordinates, radius
+            )
+            logging.debug("Found %s trainer IDs close to position.", user_ids)
+            logging.info("Retrieving trainer data...")
+            return get_users_by_id(
+                open_session, get_user_ids(user_ids), limit, offset
+            )
+        logging.info("Retrieving user by name...")
         db_user = get_user_by_username(open_session, username=username)
     if db_user is None:
         raise HTTPException(status_code=404, detail="User not found")

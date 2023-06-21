@@ -541,6 +541,56 @@ def test_pagination_with_ten_users_and_three_pages(add_mock,
         assert equal_dicts(response.json(), correct_values, {"items"})
 
 
+def test_when_getting_users_by_username_and_location_expect_error():
+    response = client.get("users?username=banana&longitude=-1&latitude=-1")
+    assert response.status_code == 406
+    assert response.json() ==\
+        {'detail': "Can't search by username and location. Use only one."}
+
+
+@patch("users.main.get_users_within")
+@patch("users.main.get_mongodb_connection")
+@patch("users.main.get_users_by_id")
+def test_when_getting_users_by_location_expect_calls(
+    get_users_by_id_mock: MagicMock,
+    get_mongodb_connection_mock: MagicMock,
+    get_users_within_mock: MagicMock,
+):
+    get_users_within_mock.return_value = [{'user_id': 1}, {'user_id': 2}]
+    get_users_by_id_mock.return_value = {}
+    response = client.get("users?longitude=-1&latitude=-2")
+    assert response.status_code == 200
+    assert response.json() == {}
+    get_users_within_mock.assert_called_once_with(ANY, (-1, -2), 1000)
+    get_mongodb_connection_mock.assert_called_once()
+    get_users_by_id_mock.assert_called_once_with(ANY, [1, 2], 10, 0)
+
+
+@patch("users.main.save_location", MagicMock)
+@patch("users.main.create_wallet")
+@patch("users.main.add_user_firebase")
+@patch("users.main.get_users_within")
+@patch("users.main.get_mongodb_connection")
+def test_when_getting_users_if_one_is_close_expect_one(
+    get_mongodb_connection_mock: MagicMock,
+    get_users_within_mock: MagicMock,
+    add_user_firebase_mock: MagicMock,
+    create_wallet_mock: MagicMock,
+    test_db,
+):
+    create_wallet_mock.return_value = test_wallet
+    add_user_firebase_mock.return_value = None
+    client.post("users", json=user_1)
+    get_users_within_mock.return_value = [{'user_id': 1}]
+    response = client.get("users?longitude=-1&latitude=-2")
+    assert response.status_code == 200
+    expected_pagination = {"total": 1, "page": 1, "size": 1, "pages": 1}
+    assert equal_dicts(response.json(), expected_pagination, {"items"})
+    assert equal_dicts(response.json()["items"][0], user_1, ignored_keys)
+    get_users_within_mock.assert_called_once_with(ANY, (-1, -2), 1000)
+    get_mongodb_connection_mock.assert_called_once()
+
+
 def test_when_checking_healthcheck_expect_uptime_greater_than_zero():
     response = client.get("/users/healthcheck/")
     assert response.status_code == 200, response.json()

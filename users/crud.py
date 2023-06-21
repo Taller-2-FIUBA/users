@@ -1,6 +1,7 @@
 """Handles CRUD database operations."""
 import math
 import logging
+from typing import List
 
 from sqlalchemy.orm import Session
 from users.models import Users, FollowedUsers, UsersWallets
@@ -66,6 +67,25 @@ def get_all_users(session: Session, limit: int, offset: int):
     page = 1 + math.ceil(offset / limit)
     return {"items": items, "total": total,
             "page": page, "size": size, "pages": pages}
+
+
+def get_users_by_id(
+    session: Session, user_ids: List[int], limit: int, offset: int
+) -> List:
+    """Get user data by id."""
+    query = session.query(Users).filter(Users.id.in_(user_ids))
+    total = query.count()
+    items = query.limit(limit).offset(offset).all()
+    size = len(items)
+    pages = math.ceil(total / limit)
+    page = 1 + math.ceil(offset / limit)
+    return {
+        "items": items,
+        "total": total,
+        "page": page,
+        "size": size,
+        "pages": pages
+    }
 
 
 def change_blocked_status(session: Session, user_id: int):

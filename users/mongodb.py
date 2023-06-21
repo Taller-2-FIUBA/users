@@ -2,8 +2,7 @@
 import logging
 from typing import List, Tuple
 
-from bson import SON
-from pymongo import MongoClient, GEO2D
+from pymongo import MongoClient, GEOSPHERE
 
 from users.config import AppConfig
 
@@ -19,7 +18,7 @@ def get_mongo_url(config: AppConfig) -> str:
 
 def initialize(connection: MongoClient):
     """Create geolocation index."""
-    connection.fiufit.user_location.create_index([(LOCATION_KEY, GEO2D)])
+    connection.fiufit.user_location.create_index([(LOCATION_KEY, GEOSPHERE)])
 
 
 def get_mongodb_connection(connection_string: str) -> MongoClient:
@@ -42,8 +41,20 @@ def edit_location(
 
 def get_users_within(
     connection: MongoClient, location: Tuple[float, float], radius: int
-) -> List[int]:
+) -> List:
     """Search for users within radius from location."""
-    query = {"loc": SON([("$near", location), ("$maxDistance", radius)])}
+    query = {
+        "location": {
+            "$near": {
+                "$geometry": {
+                    "type": "Point",
+                    "coordinates": location
+                },
+                "$maxDistance": radius
+            }
+        }
+    }
     logging.info("Searching for users %s", query)
-    connection.fiufit.user_location.find(query)
+    return list(connection.fiufit.user_location.find(
+        query, projection={"_id": False, "user_id": True}
+    )) or []

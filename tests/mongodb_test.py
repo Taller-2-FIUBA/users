@@ -1,8 +1,7 @@
 # pylint: disable= missing-module-docstring, missing-function-docstring
 from unittest.mock import MagicMock, patch
-from bson import SON
 
-from pymongo import GEO2D
+from pymongo import GEOSPHERE
 
 from users.mongodb import (
     edit_location,
@@ -21,8 +20,8 @@ def test_building_url_with_config():
         "mongo.host": "cluster.mongodb.net",
         "mongo.database": "fiufit",
     })
-    return get_mongo_url(config) ==\
-        "mongodb://fiufit:fiufit@mongodb-release/fiufit"
+    assert get_mongo_url(config) ==\
+        "mongodb://fiufit:fiufit@cluster.mongodb.net/fiufit"
 
 
 def test_when_calling_initialize_expect_calls():
@@ -31,7 +30,7 @@ def test_when_calling_initialize_expect_calls():
         "fiufit.user_location.create_index": create_index
     })
     initialize(connection)
-    create_index.assert_called_once_with([("location", GEO2D)])
+    create_index.assert_called_once_with([("location", GEOSPHERE)])
 
 
 @patch("users.mongodb.MongoClient")
@@ -54,12 +53,45 @@ def test_when_editing_location_expect_calls():
 
 
 def test_when_getting_users_within_expect_calls():
-    find = MagicMock()
+    expected_documents = [{'user_id': 1}, {'user_id': 2}]
+    find = MagicMock(return_value=expected_documents)
     connection = MagicMock(**{
         "fiufit.user_location.find": find
     })
     expected_query = {
-        "loc": SON([("$near", (1.1, 1.2)), ("$maxDistance", 1000)])
+        "location": {
+            "$near": {
+                "$geometry": {
+                    "type": "Point",
+                    "coordinates": (1.1, 1.2)
+                },
+                "$maxDistance": 1000
+            }
+        }
     }
-    get_users_within(connection, (1.1, 1.2), 1000)
-    find.assert_called_once_with(expected_query)
+    assert get_users_within(connection, (1.1, 1.2), 1000) == expected_documents
+    find.assert_called_once_with(
+        expected_query, projection={'_id': False, 'user_id': True}
+    )
+
+
+def test_when_getting_users_within_returns_none_expect_empty_list():
+    find = MagicMock(return_value=[])
+    connection = MagicMock(**{
+        "fiufit.user_location.find": find
+    })
+    expected_query = {
+        "location": {
+            "$near": {
+                "$geometry": {
+                    "type": "Point",
+                    "coordinates": (1.3, 1.4)
+                },
+                "$maxDistance": 10
+            }
+        }
+    }
+    assert not get_users_within(connection, (1.3, 1.4), 10)
+    find.assert_called_once_with(
+        expected_query, projection={'_id': False, 'user_id': True}
+    )
