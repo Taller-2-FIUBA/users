@@ -1,0 +1,338 @@
+[
+    {
+        "location": "chacarita",
+        "coordinates": [
+            -58.452820049279104,
+            -34.59598865706387
+        ]
+    },
+    {
+        "location": "paternal",
+        "coordinates": [
+            -58.465576812854067,
+            -34.596557707805793
+        ]
+    },
+    {
+        "location": "villa crespo",
+        "coordinates": [
+            -58.423752981303664,
+            -34.597827338324237
+        ]
+    },
+    {
+        "location": "villa del parque",
+        "coordinates": [
+            -58.494609756889901,
+            -34.614865239523915
+        ]
+    },
+    {
+        "location": "almagro",
+        "coordinates": [
+            -58.412870031308849,
+            -34.614116251585344
+        ]
+    },
+    {
+        "location": "caballito",
+        "coordinates": [
+            -58.430605828330869,
+            -34.607047088596268
+        ]
+    },
+    {
+        "location": "villa santa rita",
+        "coordinates": [
+            -58.481920359983263,
+            -34.624287172475682
+        ]
+    },
+    {
+        "location": "monte castro",
+        "coordinates": [
+            -58.503492061153381,
+            -34.624032421632059
+        ]
+    },
+    {
+        "location": "villa real",
+        "coordinates": [
+            -58.525116079790955,
+            -34.613999981062932
+        ]
+    },
+    {
+        "location": "flores",
+        "coordinates": [
+            -58.460413377884187,
+            -34.65679784570311
+        ]
+    },
+    {
+        "location": "floresta",
+        "coordinates": [
+            -58.483390703658294,
+            -34.624110871805819
+        ]
+    },
+    {
+        "location": "constitucion",
+        "coordinates": [
+            -58.375572903082784,
+            -34.627301618374432
+        ]
+    },
+    {
+        "location": "san cristobal",
+        "coordinates": [
+            -58.39155369918744,
+            -34.621559958985294
+        ]
+    },
+    {
+        "location": "boedo",
+        "coordinates": [
+            -58.411779314803013,
+            -34.630355869360542
+        ]
+    },
+    {
+        "location": "velez sarsfield",
+        "coordinates": [
+            -58.485573517665756,
+            -34.631402416800427
+        ]
+    },
+    {
+        "location": "villa luro",
+        "coordinates": [
+            -58.501537624795354,
+            -34.631834519387191
+        ]
+    },
+    {
+        "location": "parque patricios",
+        "coordinates": [
+            -58.410369729852491,
+            -34.648302987509048
+        ]
+    },
+    {
+        "location": "mataderos",
+        "coordinates": [
+            -58.502519716233664,
+            -34.674505026510175
+        ]
+    },
+    {
+        "location": "villa lugano",
+        "coordinates": [
+            -58.465713491933769,
+            -34.659025022031031
+        ]
+    },
+    {
+        "location": "san telmo",
+        "coordinates": [
+            -58.363454985636913,
+            -34.625121372906968
+        ]
+    },
+    {
+        "location": "saavedra",
+        "coordinates": [
+            -58.48813106999517,
+            -34.561286927922588
+        ]
+    },
+    {
+        "location": "coghlan",
+        "coordinates": [
+            -58.472420513286082,
+            -34.566097712766755
+        ]
+    },
+    {
+        "location": "villa urquiza",
+        "coordinates": [
+            -58.480976708534705,
+            -34.562642590086419
+        ]
+    },
+    {
+        "location": "colegiales",
+        "coordinates": [
+            -58.446691092141656,
+            -34.569065630362999
+        ]
+    },
+    {
+        "location": "balvanera",
+        "coordinates": [
+            -58.411918809803794,
+            -34.598003076774773
+        ]
+    },
+    {
+        "location": "villa gral. mitre",
+        "coordinates": [
+            -58.47139957315337,
+            -34.619038052995521
+        ]
+    },
+    {
+        "location": "parque chas",
+        "coordinates": [
+            -58.470815268748773,
+            -34.587445314240007
+        ]
+    },
+    {
+        "location": "agronomia",
+        "coordinates": [
+            -58.477115667518575,
+            -34.595114991483271
+        ]
+    },
+    {
+        "location": "villa ortuzar",
+        "coordinates": [
+            -58.460546951091644,
+            -34.577942955777303
+        ]
+    },
+    {
+        "location": "barracas",
+        "coordinates": [
+            -58.370335371144904,
+            -34.632925837118869
+        ]
+    },
+    {
+        "location": "parque avellaneda",
+        "coordinates": [
+            -58.47037504990147,
+            -34.638786954327806
+        ]
+    },
+    {
+        "location": "parque chacabuco",
+        "coordinates": [
+            -58.432344404332092,
+            -34.641741258314987
+        ]
+    },
+    {
+        "location": "nueva pompeya",
+        "coordinates": [
+            -58.412208948894168,
+            -34.648134879816652
+        ]
+    },
+    {
+        "location": "palermo",
+        "coordinates": [
+            -58.426759317276407,
+            -34.55202337340274
+        ]
+    },
+    {
+        "location": "villa riachuelo",
+        "coordinates": [
+            -58.449783268211569,
+            -34.680610311918883
+        ]
+    },
+    {
+        "location": "villa soldati",
+        "coordinates": [
+            -58.449132083184651,
+            -34.651165775550957
+        ]
+    },
+    {
+        "location": "villa pueyrredon",
+        "coordinates": [
+            -58.503311325084404,
+            -34.59385615958945
+        ]
+    },
+    {
+        "location": "villa devoto",
+        "coordinates": [
+            -58.508308442456297,
+            -34.613919726449851
+        ]
+    },
+    {
+        "location": "liniers",
+        "coordinates": [
+            -58.519254053232501,
+            -34.633010095268261
+        ]
+    },
+    {
+        "location": "versalles",
+        "coordinates": [
+            -58.511042961433496,
+            -34.632560160446687
+        ]
+    },
+    {
+        "location": "puerto madero",
+        "coordinates": [
+            -58.351957499447082,
+            -34.598167124010843
+        ]
+    },
+    {
+        "location": "monserrat",
+        "coordinates": [
+            -58.368799583655182,
+            -34.606826425390231
+        ]
+    },
+    {
+        "location": "san nicolas",
+        "coordinates": [
+            -58.367921119359629,
+            -34.605174288755158
+        ]
+    },
+    {
+        "location": "belgrano",
+        "coordinates": [
+            -58.450566910900889,
+            -34.535610434040521
+        ]
+    },
+    {
+        "location": "recoleta",
+        "coordinates": [
+            -58.380003885569316,
+            -34.570023524720128
+        ]
+    },
+    {
+        "location": "retiro",
+        "coordinates": [
+            -58.374272898134528,
+            -34.578704310324767
+        ]
+    },
+    {
+        "location": "nuñez",
+        "coordinates": [
+            -58.458715778296664,
+            -34.537210105085528
+        ]
+    },
+    {
+        "location": "boca",
+        "coordinates": [
+            -58.354288285111757,
+            -34.629773788686684
+        ]
+    }
+]

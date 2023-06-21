@@ -8,3 +8,4 @@ psycopg2-binary
 fastapi-pagination
 httpx
 sentry-sdk[fastapi]
+pymongo[srv]

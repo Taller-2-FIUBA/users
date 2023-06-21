@@ -1,9 +1,13 @@
 """Handles CRUD database operations."""
 import math
+import logging
+from typing import List
 
 from sqlalchemy.orm import Session
 from users.models import Users, FollowedUsers, UsersWallets
 from users.schemas import UserUpdate, UserBase
+
+BANNED_FIELDS_FOR_UPDATE = ["coordinates"]
 
 
 def create_user(session: Session, user: UserBase, wallet):
@@ -65,6 +69,25 @@ def get_all_users(session: Session, limit: int, offset: int):
             "page": page, "size": size, "pages": pages}
 
 
+def get_users_by_id(
+    session: Session, user_ids: List[int], limit: int, offset: int
+) -> List:
+    """Get user data by id."""
+    query = session.query(Users).filter(Users.id.in_(user_ids))
+    total = query.count()
+    items = query.limit(limit).offset(offset).all()
+    size = len(items)
+    pages = math.ceil(total / limit)
+    page = 1 + math.ceil(offset / limit)
+    return {
+        "items": items,
+        "total": total,
+        "page": page,
+        "size": size,
+        "pages": pages
+    }
+
+
 def change_blocked_status(session: Session, user_id: int):
     """Inverts blocked status for user with provided id."""
     db_user = session.query(Users).filter(Users.id == user_id).first()
@@ -75,8 +98,10 @@ def change_blocked_status(session: Session, user_id: int):
 def update_user(session: Session, _id: int, user: UserUpdate):
     """Update an existing user."""
     columns_to_update = {
-        col: value for col, value in user.__dict__.items() if value is not None
+        col: value for col, value in user.__dict__.items() if
+        value is not None and col not in BANNED_FIELDS_FOR_UPDATE
     }
+    logging.debug("Updating %s", columns_to_update)
     session.query(Users) \
         .filter(Users.id == _id) \
         .update(values=columns_to_update)

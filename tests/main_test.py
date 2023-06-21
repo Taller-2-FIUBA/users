@@ -1,6 +1,6 @@
 # pylint: disable= missing-module-docstring, missing-function-docstring
 # pylint: disable= unused-argument, redefined-outer-name
-from unittest.mock import patch
+from unittest.mock import ANY, MagicMock, patch
 from hamcrest import assert_that, greater_than
 
 import pytest
@@ -8,8 +8,16 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from tests.testing_constants import user_1, user_2, user_3, \
-    user_to_update, user_template_no_email, private_keys, test_wallet
+from tests.testing_constants import (
+    user_1,
+    user_2,
+    user_3,
+    user_to_update,
+    user_template_no_email,
+    private_keys,
+    test_wallet,
+    user_to_update_location,
+)
 from users.main import DOCUMENTATION_URI, app, get_db
 from users.models import Base
 
@@ -60,16 +68,30 @@ def equal_dicts(dict1, dict2, ignore_keys):
 
 @patch('users.main.create_wallet')
 @patch('users.main.add_user_firebase')
-def test_user_stored_correctly(add_mock, create_wallet, test_db):
+@patch('users.main.save_location')
+def test_user_stored_correctly(
+    save_location: MagicMock,
+    add_mock: MagicMock,
+    create_wallet: MagicMock,
+    test_db,
+):
     add_mock.return_value = None
     create_wallet.return_value = test_wallet
-    response = client.post("users", json=user_1)
+    response = client.post("users", json=user_1 | {"coordinates": [1.1, -2.2]})
     assert response.status_code == 200
     assert equal_dicts(response.json(), user_1, ignored_keys)
+    save_location.assert_called_once_with(
+        "mongodb://fiufit:fiufit@cluster.mongodb.net/fiufit",
+        True,
+        1,
+        (1.1, -2.2),
+        ANY,
+    )
 
 
 @patch('users.main.create_wallet')
 @patch('users.main.add_user_firebase')
+@patch('users.main.save_location', MagicMock)
 def test_several_users_stored_correctly(add_mock, create_wallet, test_db):
     add_mock.return_value = None
     create_wallet.return_value = test_wallet
@@ -83,6 +105,7 @@ def test_several_users_stored_correctly(add_mock, create_wallet, test_db):
 
 @patch('users.main.create_wallet')
 @patch('users.main.add_user_firebase')
+@patch('users.main.save_location', MagicMock)
 def test_user_that_wasnt_stored_isnt_retrieved(add_mock,
                                                create_wallet,
                                                test_db):
@@ -100,6 +123,7 @@ def test_user_that_wasnt_stored_isnt_retrieved(add_mock,
 
 @patch('users.main.create_wallet')
 @patch('users.main.add_user_firebase')
+@patch('users.main.save_location', MagicMock)
 def test_can_get_several_user_details(add_mock, create_wallet, test_db):
     add_mock.return_value = None
     create_wallet.return_value = test_wallet
@@ -115,6 +139,7 @@ def test_can_get_several_user_details(add_mock, create_wallet, test_db):
 @patch('users.main.create_wallet')
 @patch('users.main.get_credentials')
 @patch('users.main.add_user_firebase')
+@patch('users.main.save_location', MagicMock)
 def test_can_retrieve_user_with_his_id(add_mock, creds_mock,
                                        create_wallet, test_db):
     add_mock.return_value = None
@@ -130,6 +155,7 @@ def test_can_retrieve_user_with_his_id(add_mock, creds_mock,
 @patch('users.main.get_credentials')
 @patch('users.main.create_wallet')
 @patch('users.main.add_user_firebase')
+@patch('users.main.save_location', MagicMock)
 def test_cannot_retrieve_user_with_wrong_id(add_mock, create_wallet,
                                             creds_mock, test_db):
     add_mock.return_value = None
@@ -145,6 +171,7 @@ def test_cannot_retrieve_user_with_wrong_id(add_mock, create_wallet,
 @patch('users.main.token_login_firebase')
 @patch('users.main.create_wallet')
 @patch('users.main.add_user_firebase')
+@patch('users.main.save_location', MagicMock)
 def test_existing_user_logs_in_correctly(add_mock, create_wallet,
                                          login_mock, test_db):
     add_mock.return_value = None
@@ -162,6 +189,7 @@ def test_existing_user_logs_in_correctly(add_mock, create_wallet,
 @patch('users.util.get_user_by_email')
 @patch('users.main.create_wallet')
 @patch('users.main.add_user_firebase')
+@patch('users.main.save_location', MagicMock)
 def test_non_existing_user_raises_exception_at_login(add_mock, create_wallet,
                                                      search_mock, test_db):
     add_mock.return_value = None
@@ -177,6 +205,7 @@ def test_non_existing_user_raises_exception_at_login(add_mock, create_wallet,
 @patch('users.main.download_image')
 @patch('users.main.create_wallet')
 @patch('users.main.add_user_firebase')
+@patch('users.main.save_location', MagicMock)
 def test_can_retrieve_user_with_his_username(add_mock, create_wallet,
                                              download_mock, test_db):
     add_mock.return_value = None
@@ -191,6 +220,7 @@ def test_can_retrieve_user_with_his_username(add_mock, create_wallet,
 
 @patch('users.main.create_wallet')
 @patch('users.main.add_user_firebase')
+@patch('users.main.save_location', MagicMock)
 def test_cannot_retrieve_user_with_incorrect_username(add_mock, create_wallet,
                                                       test_db):
     add_mock.return_value = None
@@ -204,6 +234,7 @@ def test_cannot_retrieve_user_with_incorrect_username(add_mock, create_wallet,
 @patch('users.main.download_image')
 @patch('users.main.create_wallet')
 @patch('users.main.add_user_firebase')
+@patch('users.main.save_location', MagicMock)
 def test_can_retrieve_several_users_with_their_usernames(add_mock,
                                                          create_wallet,
                                                          download_mock,
@@ -224,14 +255,23 @@ def test_can_retrieve_several_users_with_their_usernames(add_mock,
 @patch('users.main.get_credentials')
 @patch('users.main.create_wallet')
 @patch('users.main.add_user_firebase')
-def test_when_updating_user_data_expect_data(add_mock, create_wallet,
-                                             creds_mock, test_db):
+@patch('users.main.save_location')
+def test_when_updating_user_data_expect_data(
+    save_location_mock: MagicMock,
+    add_mock,
+    create_wallet,
+    creds_mock,
+    test_db,
+):
+    # Create user
     add_mock.return_value = None
     create_wallet.return_value = test_wallet
     response_post = client.post("users", json=user_to_update)
     assert response_post.status_code == 200
-    creds_mock.return_value = {"id": 1,
-                               "role": "user"}
+    save_location_mock.assert_called_once()
+    # Edit user
+    save_location_mock.reset_mock()
+    creds_mock.return_value = {"id": 1, "role": "user"}
     response_patch = client.patch(
         "users/" + str(response_post.json()["id"]),
         json={
@@ -242,10 +282,19 @@ def test_when_updating_user_data_expect_data(add_mock, create_wallet,
             "weight": 100,
             "birth_date": "23-6-2000",
             "location": "Place, AnotherPlace",
+            "coordinates": [-1, -1]
         }
     )
     assert response_patch.status_code == 200
     assert response_patch.json() == {}
+    save_location_mock.assert_called_once_with(
+        "mongodb://fiufit:fiufit@cluster.mongodb.net/fiufit",
+        True,
+        response_post.json()["id"],
+        (-1, -1),
+        ANY,
+    )
+    # Validate user
     user = "users/" + str(response_post.json()["id"])
     response_get = client.get(user)
     assert response_get.status_code == 200
@@ -267,9 +316,48 @@ def test_when_updating_user_data_expect_data(add_mock, create_wallet,
     )
 
 
+@patch('users.main.get_credentials')
+@patch('users.main.create_wallet')
+@patch('users.main.add_user_firebase')
+@patch('users.main.save_location')
+def test_when_updating_location_but_not_coordinates_expect_no_call(
+    save_location_mock: MagicMock,
+    add_mock,
+    create_wallet,
+    creds_mock,
+    test_db,
+):
+    # Create user
+    add_mock.return_value = None
+    create_wallet.return_value = test_wallet
+    response_post = client.post("users", json=user_to_update_location)
+    assert response_post.status_code == 200
+    save_location_mock.assert_called_once()
+    # Edit user
+    save_location_mock.reset_mock()
+    creds_mock.return_value = {"id": 1, "role": "user"}
+    response_patch = client.patch(
+        "users/" + str(response_post.json()["id"]),
+        json={"location": "new_location"}
+    )
+    assert response_patch.status_code == 200
+    assert response_patch.json() == {}
+    save_location_mock.assert_not_called()
+    # Validate user
+    user = "users/" + str(response_post.json()["id"])
+    response_get = client.get(user)
+    assert response_get.status_code == 200
+    assert equal_dicts(
+        response_get.json(),
+        user_to_update_location | {"location": "new_location"},
+        {"id", "is_blocked", "password"}
+    )
+
+
 @patch('users.main.create_wallet')
 @patch('users.main.get_credentials')
 @patch('users.main.add_user_firebase')
+@patch('users.main.save_location', MagicMock)
 def test_when_update_height_and_weight_expect_height_and_weight(add_mock,
                                                                 cred_mock,
                                                                 create_wallet,
@@ -322,6 +410,7 @@ def test_when_updating_non_existent_user_id_expect_not_found(creds_mock,
 @patch('users.main.create_wallet')
 @patch('users.util.get_auth_header')
 @patch('users.main.add_user_firebase')
+@patch('users.main.save_location', MagicMock)
 def test_cant_change_status_without_token(add_mock, auth_mock,
                                           create_wallet, test_db):
     add_mock.return_value = None
@@ -336,6 +425,7 @@ def test_cant_change_status_without_token(add_mock, auth_mock,
 @patch('users.main.create_wallet')
 @patch('users.main.get_credentials')
 @patch('users.main.add_user_firebase')
+@patch('users.main.save_location', MagicMock)
 def test_cant_change_status_as_user(add_mock, creds_mock,
                                     create_wallet, test_db):
     add_mock.return_value = None
@@ -352,6 +442,7 @@ def test_cant_change_status_as_user(add_mock, creds_mock,
 @patch('users.main.create_wallet')
 @patch('users.main.get_credentials')
 @patch('users.main.add_user_firebase')
+@patch('users.main.save_location', MagicMock)
 def test_can_change_status_to_blocked_and_back_again_as_admin(add_mock,
                                                               creds_mock,
                                                               create_wallet,
@@ -378,6 +469,7 @@ def test_can_change_status_to_blocked_and_back_again_as_admin(add_mock,
 @patch('users.main.create_wallet')
 @patch('users.main.token_login_firebase')
 @patch('users.main.add_user_firebase')
+@patch('users.main.save_location', MagicMock)
 def test_pagination_with_ten_users_returns_correct_values(add_mock,
                                                           creds_mock,
                                                           create_wallet,
@@ -400,6 +492,7 @@ def test_pagination_with_ten_users_returns_correct_values(add_mock,
 @patch('users.main.create_wallet')
 @patch('users.main.token_login_firebase')
 @patch('users.main.add_user_firebase')
+@patch('users.main.save_location', MagicMock)
 def test_pagination_with_ten_users_and_two_pages_correct_values(add_mock,
                                                                 creds_mock,
                                                                 create_wallet,
@@ -424,6 +517,7 @@ def test_pagination_with_ten_users_and_two_pages_correct_values(add_mock,
 @patch('users.main.create_wallet')
 @patch('users.main.token_login_firebase')
 @patch('users.main.add_user_firebase')
+@patch('users.main.save_location', MagicMock)
 def test_pagination_with_ten_users_and_three_pages(add_mock,
                                                    creds_mock,
                                                    create_wallet,
@@ -447,6 +541,56 @@ def test_pagination_with_ten_users_and_three_pages(add_mock,
         assert equal_dicts(response.json(), correct_values, {"items"})
 
 
+def test_when_getting_users_by_username_and_location_expect_error():
+    response = client.get("users?username=banana&longitude=-1&latitude=-1")
+    assert response.status_code == 406
+    assert response.json() ==\
+        {'detail': "Can't search by username and location. Use only one."}
+
+
+@patch("users.main.get_users_within")
+@patch("users.main.get_mongodb_connection")
+@patch("users.main.get_users_by_id")
+def test_when_getting_users_by_location_expect_calls(
+    get_users_by_id_mock: MagicMock,
+    get_mongodb_connection_mock: MagicMock,
+    get_users_within_mock: MagicMock,
+):
+    get_users_within_mock.return_value = [{'user_id': 1}, {'user_id': 2}]
+    get_users_by_id_mock.return_value = {}
+    response = client.get("users?longitude=-1&latitude=-2")
+    assert response.status_code == 200
+    assert response.json() == {}
+    get_users_within_mock.assert_called_once_with(ANY, (-1, -2), 1000)
+    get_mongodb_connection_mock.assert_called_once()
+    get_users_by_id_mock.assert_called_once_with(ANY, [1, 2], 10, 0)
+
+
+@patch("users.main.save_location", MagicMock)
+@patch("users.main.create_wallet")
+@patch("users.main.add_user_firebase")
+@patch("users.main.get_users_within")
+@patch("users.main.get_mongodb_connection")
+def test_when_getting_users_if_one_is_close_expect_one(
+    get_mongodb_connection_mock: MagicMock,
+    get_users_within_mock: MagicMock,
+    add_user_firebase_mock: MagicMock,
+    create_wallet_mock: MagicMock,
+    test_db,
+):
+    create_wallet_mock.return_value = test_wallet
+    add_user_firebase_mock.return_value = None
+    client.post("users", json=user_1)
+    get_users_within_mock.return_value = [{'user_id': 1}]
+    response = client.get("users?longitude=-1&latitude=-2")
+    assert response.status_code == 200
+    expected_pagination = {"total": 1, "page": 1, "size": 1, "pages": 1}
+    assert equal_dicts(response.json(), expected_pagination, {"items"})
+    assert equal_dicts(response.json()["items"][0], user_1, ignored_keys)
+    get_users_within_mock.assert_called_once_with(ANY, (-1, -2), 1000)
+    get_mongodb_connection_mock.assert_called_once()
+
+
 def test_when_checking_healthcheck_expect_uptime_greater_than_zero():
     response = client.get("/users/healthcheck/")
     assert response.status_code == 200, response.json()
@@ -461,3 +605,15 @@ def test_when_getting_swagger_ui_expect_200():
 def test_when_getting_openapi_doc_expect_200():
     response = client.get(DOCUMENTATION_URI + "openapi.json")
     assert response.status_code == 200, response.json()
+
+
+def test_when_getting_location_expect_list():
+    response = client.get("/users/locations/")
+    assert response.status_code == 200, response.json()
+    assert response.json()[2] == {
+        "location": "villa crespo",
+        "coordinates": [
+            -58.423752981303664,
+            -34.597827338324237
+        ]
+    }

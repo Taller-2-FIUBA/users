@@ -68,6 +68,20 @@ user_to_update = {
     "is_athlete": True
 }
 
+user_to_update_location = {
+    "password": "location",
+    "username": "location",
+    "email": "location@abcd.com",
+    "name": "location",
+    "surname": "location",
+    "height": 1.1,
+    "weight": 800,
+    "birth_date": "23-4-1999",
+    "location": "old_location",
+    "registration_date": "23-3-2022",
+    "is_athlete": True
+}
+
 user_template_no_email = {
     "password": "password",
     "name": "name",

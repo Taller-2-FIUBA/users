@@ -17,3 +17,5 @@ data:
   USERS_SENTRY_ENABLED: "true"
   USERS_SENTRY_DSN: $USERS_SENTRY_DSN
   USERS_PAYMENTS_HOST: payment-service.taller2-marianocinalli.svc.cluster.local:8020
+  USERS_MONGO_HOST: fiufit.rqnbyme.mongodb.net
+  USERS_MONGO_DRIVER: mongodb+srv

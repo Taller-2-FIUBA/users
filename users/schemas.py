@@ -1,6 +1,6 @@
 # pylint: disable=no-name-in-module
 """Defines models for data exchange in API and between modules."""
-from typing import Optional
+from typing import Optional, Tuple
 from pydantic import BaseModel
 
 
@@ -15,6 +15,7 @@ class UserBase(BaseModel):
     weight: int
     birth_date: str
     location: str
+    coordinates: Optional[Tuple[float, float]]
     registration_date: str
     is_athlete: bool
     image: Optional[str]
@@ -30,6 +31,7 @@ class UserUpdate(BaseModel):
     weight: Optional[int]
     birth_date: Optional[str]
     location: Optional[str]
+    coordinates: Optional[Tuple[float, float]]
 
 
 class UserCreate(UserBase):
@@ -48,3 +50,10 @@ class User(UserBase):
         """Required to enable orm."""
 
         orm_mode = True
+
+
+class Location(BaseModel):
+    """A location. Coordinates format (longitude, latitude)."""
+
+    location: str
+    coordinates: Tuple[float, float]

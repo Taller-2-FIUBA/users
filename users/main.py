@@ -1,8 +1,9 @@
 """Define all endpoints here."""
+import json
 import logging
 import os
 import time
-from typing import Optional
+from typing import List, Optional
 import sentry_sdk
 import httpx
 
@@ -23,6 +24,7 @@ from users.crud import (
     get_all_users,
     get_user_by_id,
     get_user_by_username,
+    get_users_by_id,
     update_user,
     change_blocked_status,
     get_user_by_email,
@@ -30,7 +32,13 @@ from users.crud import (
     unfollow_user,
     follow_new_user, get_wallet_details, get_followers
 )
-from users.schemas import UserCreate, UserUpdate, UserBase
+from users.mongodb import (
+    get_mongo_url,
+    get_mongodb_connection,
+    get_users_within,
+    initialize,
+)
+from users.schemas import UserCreate, UserUpdate, UserBase, Location
 from users.models import Base
 from users.admin.dao import create_admin, get_all as get_all_admins
 from users.admin.dto import AdminCreationDTO
@@ -38,11 +46,18 @@ from users.util import get_auth_header, get_credentials, \
     get_token, add_user_firebase, token_login_firebase, \
     create_wallet, upload_image, download_image, get_balance
 from users.healthcheck import HealthCheckDto
+from users.location_helper import (
+    get_coordinates,
+    get_user_ids,
+    save_location,
+)
 
 BASE_URI = "/users"
 CONFIGURATION = to_config(AppConfig)
 DOCUMENTATION_URI = BASE_URI + "/documentation/"
 START = time.time()
+MONGO_URL = get_mongo_url(CONFIGURATION)
+
 
 if CONFIGURATION.sentry.enabled:
     sentry_sdk.init(dsn=CONFIGURATION.sentry.dsn, traces_sample_rate=0.5)
@@ -89,6 +104,7 @@ ENGINE = create_engine(get_database_url(CONFIGURATION))
 if "TESTING" not in os.environ:
     logging.info("Building database...")
     Base.metadata.create_all(bind=ENGINE)
+    initialize(get_mongodb_connection(MONGO_URL))
 
 
 # Helper methods, move somewhere else
@@ -136,13 +152,20 @@ async def create(new_user: UserCreate, session: Session = Depends(get_db)):
         )
         raise HTTPException(detail=msg, status_code=400)
     validate_user(session, new_user)
-    wallet = await create_wallet()
     await add_user_firebase(new_user.email, new_user.password)
+    wallet = await create_wallet()
     logging.debug("Creating user in DB...")
     if new_user.image:
         logging.info("Uploading user image...")
         await upload_image(new_user.image, new_user.username)
     db_user = create_user(session=session, user=new_user, wallet=wallet)
+    save_location(
+        MONGO_URL,
+        db_user.is_athlete,
+        db_user.id,
+        new_user.coordinates,
+        CONFIGURATION
+    )
     return db_user
 
 
@@ -178,6 +201,13 @@ async def create_idp_user(request: Request,
     wallet = await create_wallet()
     logging.debug("Creating IDP user in DB...")
     db_user = create_user(session=session, user=user, wallet=wallet)
+    save_location(
+        MONGO_URL,
+        db_user.is_athlete,
+        db_user.id,
+        user.coordinates,
+        CONFIGURATION
+    )
     return db_user
 
 
@@ -341,27 +371,61 @@ async def patch_user(
         logging.warning("Invalid role %s", token["role"])
         raise HTTPException(status_code=403, detail="Invalid credentials")
     with session as open_session:
-        if get_user_by_id(open_session, user_id=_id) is None:
+        db_user = get_user_by_id(open_session, user_id=_id)
+        if db_user is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
             )
         update_user(session, _id, user)
+        if user.coordinates:
+            save_location(
+                MONGO_URL,
+                db_user.is_athlete,
+                _id,
+                user.coordinates,
+                CONFIGURATION,
+            )
     return JSONResponse(content={}, status_code=200)
 
 
+# pylint: disable=too-many-arguments
 @app.get("/users")
 async def get_all(
     username: Optional[str] = None,
+    latitude: Optional[float] = None,
+    longitude: Optional[float] = None,
+    radius: Optional[int] = 1000,
     offset: Optional[int] = 0,
     limit: Optional[int] = 10,
-    session: Session = Depends(get_db)
+    session: Session = Depends(get_db),
 ):
-    """Retrieve details for all users currently present in the database."""
-    logging.info("Retrieving users...")
-    m.REQUEST_COUNTER.labels("/users", "patch").inc()
+    """Retrieve details for all users matching a search criteria."""
+    logging.info(
+        "Retrieving users, using filters: username='%s' latitude='%s' "
+        "longitude='%s' radius='%s' offset='%s' limit='%s'",
+        username, latitude, longitude, radius, offset, limit
+    )
+    m.REQUEST_COUNTER.labels("/users", "get").inc()
+    coordinates = get_coordinates(longitude, latitude)
+    if username and coordinates:
+        raise HTTPException(
+            status_code=status.HTTP_406_NOT_ACCEPTABLE,
+            detail="Can't search by username and location. Use only one."
+        )
     with session as open_session:
-        if username is None:
+        if username is None and coordinates is None:
+            logging.info("Retrieving all users...")
             return get_all_users(open_session, limit=limit, offset=offset)
+        if coordinates:
+            user_ids = get_users_within(
+                get_mongodb_connection(MONGO_URL), coordinates, radius
+            )
+            logging.debug("Found %s trainer IDs close to position.", user_ids)
+            logging.info("Retrieving trainer data...")
+            return get_users_by_id(
+                open_session, get_user_ids(user_ids), limit, offset
+            )
+        logging.info("Retrieving user by name...")
         db_user = get_user_by_username(open_session, username=username)
     if db_user is None:
         raise HTTPException(status_code=404, detail="User not found")
@@ -518,3 +582,12 @@ async def custom_swagger_ui_html(req: Request):
         openapi_url=openapi_url,
         title="FIUFIT users",
     )
+
+
+@app.get(BASE_URI + "/locations/", response_model=List[Location])
+async def get_locations() -> List[Location]:
+    """Return CABA locations. Coordinates format (longitude, latitude)."""
+    logging.info("Returning locations...")
+    m.REQUEST_COUNTER.labels(BASE_URI + "/locations/", "post").inc()
+    with open("static/location.json", encoding="UTF-8") as location_file:
+        return json.load(location_file)
