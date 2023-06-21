@@ -50,3 +50,10 @@ class User(UserBase):
         """Required to enable orm."""
 
         orm_mode = True
+
+
+class Location(BaseModel):
+    """A location. Coordinates format (longitude, latitude)."""
+
+    location: str
+    coordinates: Tuple[float, float]

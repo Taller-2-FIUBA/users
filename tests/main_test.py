@@ -605,3 +605,15 @@ def test_when_getting_swagger_ui_expect_200():
 def test_when_getting_openapi_doc_expect_200():
     response = client.get(DOCUMENTATION_URI + "openapi.json")
     assert response.status_code == 200, response.json()
+
+
+def test_when_getting_location_expect_list():
+    response = client.get("/users/locations/")
+    assert response.status_code == 200, response.json()
+    assert response.json()[2] == {
+        "location": "villa crespo",
+        "coordinates": [
+            -58.423752981303664,
+            -34.597827338324237
+        ]
+    }

@@ -1,8 +1,9 @@
 """Define all endpoints here."""
+import json
 import logging
 import os
 import time
-from typing import Optional
+from typing import List, Optional
 import sentry_sdk
 import httpx
 
@@ -37,7 +38,7 @@ from users.mongodb import (
     get_users_within,
     initialize,
 )
-from users.schemas import UserCreate, UserUpdate, UserBase
+from users.schemas import UserCreate, UserUpdate, UserBase, Location
 from users.models import Base
 from users.admin.dao import create_admin, get_all as get_all_admins
 from users.admin.dto import AdminCreationDTO
@@ -581,3 +582,12 @@ async def custom_swagger_ui_html(req: Request):
         openapi_url=openapi_url,
         title="FIUFIT users",
     )
+
+
+@app.get(BASE_URI + "/locations/", response_model=List[Location])
+async def get_locations() -> List[Location]:
+    """Return CABA locations. Coordinates format (longitude, latitude)."""
+    logging.info("Returning locations...")
+    m.REQUEST_COUNTER.labels(BASE_URI + "/locations/", "post").inc()
+    with open("static/location.json", encoding="UTF-8") as location_file:
+        return json.load(location_file)
