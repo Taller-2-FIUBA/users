@@ -4,6 +4,7 @@ import httpx
 from environ import to_config
 from fastapi import HTTPException, Request
 from sqlalchemy.orm import Session
+from starlette.responses import JSONResponse
 
 from users.admin.dao import get_admin_by_email
 from users.config import AppConfig
@@ -155,4 +156,40 @@ async def get_balance(wallet: UsersWallets):
     if res.status_code != 200:
         raise HTTPException(status_code=res.status_code,
                             detail="Issue retrieving wallet balance")
+    return res.json()
+
+
+async def transfer_money_outside(send_wallet, receiver_address, amount):
+    """Make deposit through payment service."""
+    logging.info("Sending money from %s to %s",
+                 send_wallet.address, receiver_address)
+    body = {
+        "senderKey": send_wallet.private_key,
+        "receiverAddress": receiver_address,
+        "amountInEthers": str(amount)
+    }
+    url = f"http://{CONFIGURATION.payments.host}/payment/extraction"
+    res = await httpx.AsyncClient().post(url, json=body)
+    if res.status_code != 200:
+        error = res.json()
+        logging.error("Error when trying to extract money: %s", error)
+        raise HTTPException(status_code=res.status_code, detail=error)
+    return JSONResponse(content={}, status_code=200)
+
+
+async def deposit_money(send_wallet, recv_wallet, amount):
+    """Make deposit through payment service."""
+    logging.info("Sending money from %s to %s",
+                 send_wallet.address, recv_wallet.address)
+    body = {
+        "senderKey": send_wallet.private_key,
+        "receiverKey": recv_wallet.private_key,
+        "amountInEthers": str(amount)
+    }
+    url = f"http://{CONFIGURATION.payments.host}/payment/deposit"
+    res = await httpx.AsyncClient().post(url, json=body)
+    if res.status_code != 200:
+        error = res.json()
+        logging.error("Error when trying to make deposit: %s", error)
+        raise HTTPException(status_code=res.status_code, detail=error)
     return res.json()

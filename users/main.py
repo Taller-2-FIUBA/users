@@ -44,7 +44,8 @@ from users.admin.dao import create_admin, get_all as get_all_admins
 from users.admin.dto import AdminCreationDTO
 from users.util import get_auth_header, get_credentials, \
     get_token, add_user_firebase, token_login_firebase, \
-    create_wallet, upload_image, download_image, get_balance
+    create_wallet, upload_image, download_image, get_balance, \
+    transfer_money_outside, deposit_money
 from users.healthcheck import HealthCheckDto
 from users.location_helper import (
     get_coordinates,
@@ -297,24 +298,6 @@ async def get_wallet_balance(
     return JSONResponse(content=body, status_code=200)
 
 
-async def deposit_money(send_wallet, recv_wallet, amount):
-    """Make deposit through payment service."""
-    logging.info("Sending money from %s to %s",
-                 send_wallet.address, recv_wallet.address)
-    body = {
-        "senderKey": send_wallet.private_key,
-        "receiverKey": recv_wallet.private_key,
-        "amountInEthers": str(amount)
-    }
-    url = f"http://{CONFIGURATION.payments.host}/payment/deposit"
-    res = await httpx.AsyncClient().post(url, json=body)
-    if res.status_code != 200:
-        error = res.json()
-        logging.error("Error when trying to make deposit: %s", error)
-        raise HTTPException(status_code=res.status_code, detail=error)
-    return res.json()
-
-
 @app.post("/users/deposit")
 async def make_payment(
     request: Request,
@@ -332,7 +315,28 @@ async def make_payment(
     with session as open_session:
         sender_wallet = get_wallet_details(open_session, user_id=sender_id)
         receiver_wallet = get_wallet_details(open_session, user_id=receiver_id)
-        return await deposit_money(sender_wallet, receiver_wallet, amount)
+        await deposit_money(sender_wallet, receiver_wallet, amount)
+    return JSONResponse(content={}, status_code=200)
+
+
+@app.post("/users/extraction")
+async def make_outside_payment(
+    request: Request,
+    session: Session = Depends(get_db)
+):
+    """Transfer specified money amount to an outside account."""
+    req = await request.json()
+    receiver_address = req["receiver_address"]
+    sender_id = req["sender_id"]
+    amount = req["amount"]
+    token = await get_credentials(request)
+    if token["id"] != sender_id or token["role"] != "user":
+        logging.warning("Invalid wallet access for user %d", sender_id)
+        raise HTTPException(status_code=403, detail="Invalid credentials")
+    with session as open_session:
+        sender_wallet = get_wallet_details(open_session, user_id=sender_id)
+        await transfer_money_outside(sender_wallet, receiver_address, amount)
+    return JSONResponse(content={}, status_code=200)
 
 
 @app.patch("/users/status/{_id}")
