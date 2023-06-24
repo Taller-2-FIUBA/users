@@ -193,3 +193,18 @@ async def deposit_money(send_wallet, recv_wallet, amount):
         logging.error("Error when trying to make deposit: %s", error)
         raise HTTPException(status_code=res.status_code, detail=error)
     return res.json()
+
+
+async def add_to_balance(receiver_wallet, amount):
+    """Add ETH to a certain account."""
+    body = {
+        "amountInEthers": str(amount),
+        "receiverKey": receiver_wallet.private_key
+    }
+    url = f"http://{CONFIGURATION.payments.host}/payment/wallet/+" \
+          + receiver_wallet.address + "/balance"
+    res = await httpx.AsyncClient().patch(url, json=body)
+    if res.status_code != 200:
+        error = res.json()
+        logging.error("Error transferring money from contract: %s", error)
+        raise HTTPException(status_code=res.status_code, detail=error)

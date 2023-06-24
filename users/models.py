@@ -1,6 +1,7 @@
 """Defines table structure for each table in the database."""
 
-from sqlalchemy import Column, String, Integer, Float, Boolean, ForeignKey
+from sqlalchemy import Column, String, Integer, \
+    Float, Boolean, ForeignKey, DateTime
 from sqlalchemy.orm import declarative_base
 
 Base = declarative_base()
@@ -39,6 +40,16 @@ class UsersWallets(Base):
     user_id = Column(Integer, ForeignKey("users.id"), primary_key=True)
     address = Column(String)
     private_key = Column(String)
+
+
+class Transactions(Base):
+    """Table structure for user."""
+
+    __tablename__ = "transactions"
+    sender = Column(String, primary_key=True)
+    receiver = Column(String, primary_key=True)
+    amount = Column(Float, primary_key=True)
+    date = Column(DateTime, primary_key=True)
 
 
 class Admin(Base):

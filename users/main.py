@@ -30,14 +30,16 @@ from users.crud import (
     get_user_by_email,
     get_users_followed_by,
     unfollow_user,
-    follow_new_user, get_wallet_details, get_followers
+    follow_new_user, get_wallet_details,
+    get_followers, add_transaction, get_all_transactions
 )
 from users.mongodb import (
     get_mongo_url,
     get_mongodb_connection,
     get_users_within,
-    initialize,
+    initialize
 )
+from users.payment.dto import BalanceBonus
 from users.schemas import UserCreate, UserUpdate, UserBase, Location
 from users.models import Base
 from users.admin.dao import create_admin, get_all as get_all_admins
@@ -45,7 +47,7 @@ from users.admin.dto import AdminCreationDTO
 from users.util import get_auth_header, get_credentials, \
     get_token, add_user_firebase, token_login_firebase, \
     create_wallet, upload_image, download_image, get_balance, \
-    transfer_money_outside, deposit_money
+    transfer_money_outside, deposit_money, add_to_balance
 from users.healthcheck import HealthCheckDto
 from users.location_helper import (
     get_coordinates,
@@ -228,6 +230,30 @@ async def login_idp(request: Request, session: Session = Depends(get_db)):
     return {"token": await get_token("user", user.id), "id": user.id}
 
 
+# pylint: disable=too-many-arguments
+@app.get("/users/transactions")
+async def get_transactions(
+    request: Request,
+    wallet_address: Optional[str] = None,
+    minimum: Optional[float] = 0.0,
+    offset: Optional[int] = 0,
+    limit: Optional[int] = 10,
+    session: Session = Depends(get_db)
+):
+    """Get all transactions."""
+    token = await get_credentials(request)
+    if token["role"] != "admin":
+        logging.warning("Invalid credentials for requesting all transactions")
+        raise HTTPException(status_code=403, detail="Invalid credentials")
+    with session as open_session:
+        body = get_all_transactions(open_session,
+                                    wallet_address,
+                                    minimum,
+                                    limit,
+                                    offset)
+        return body
+
+
 @app.get("/users/{_id}")
 async def get_one(
     request: Request,
@@ -270,7 +296,7 @@ async def get_user_wallet(
             "address": wallet.address,
             "private_key": wallet.private_key
         }
-    return JSONResponse(content=body, status_code=200)
+        return JSONResponse(content=body, status_code=200)
 
 
 @app.get("/users/{user_id}/wallet/balance")
@@ -283,7 +309,7 @@ async def get_wallet_balance(
     logging.info("Getting wallet balance belonging to user %d ...", user_id)
     m.REQUEST_COUNTER.labels("/users/{user_id}/wallet/balance", "get").inc()
     token = await get_credentials(request)
-    if token["role"] != "user" or token["id"] != user_id:
+    if token["id"] != user_id and token["role"] == "user":
         logging.warning("Invalid wallet access for user %d", user_id)
         raise HTTPException(status_code=403, detail="Invalid credentials")
     with session as open_session:
@@ -316,7 +342,9 @@ async def make_payment(
         sender_wallet = get_wallet_details(open_session, user_id=sender_id)
         receiver_wallet = get_wallet_details(open_session, user_id=receiver_id)
         await deposit_money(sender_wallet, receiver_wallet, amount)
-    return JSONResponse(content={}, status_code=200)
+        add_transaction(session, sender_wallet.address,
+                        receiver_wallet.address, amount)
+        return JSONResponse(content={}, status_code=200)
 
 
 @app.post("/users/extraction")
@@ -336,7 +364,9 @@ async def make_outside_payment(
     with session as open_session:
         sender_wallet = get_wallet_details(open_session, user_id=sender_id)
         await transfer_money_outside(sender_wallet, receiver_address, amount)
-    return JSONResponse(content={}, status_code=200)
+        add_transaction(session, sender_wallet.address,
+                        receiver_address, amount)
+        return JSONResponse(content={}, status_code=200)
 
 
 @app.patch("/users/status/{_id}")
@@ -390,6 +420,26 @@ async def patch_user(
                 CONFIGURATION,
             )
     return JSONResponse(content={}, status_code=200)
+
+
+@app.patch("/users/{user_id}/wallet/balance")
+async def add_balance(
+    request: Request,
+    body: BalanceBonus,
+    user_id: int,
+    session: Session = Depends(get_db)
+):
+    """Add balance to a user wallet."""
+    logging.info("Creating admin...")
+    m.REQUEST_COUNTER.labels("/users/{user_id}/wallet/balance", "patch").inc()
+    token = await get_credentials(request)
+    if token["role"] != "admin":
+        logging.warning("Invalid credentials for balance modification")
+        raise HTTPException(status_code=403, detail="Invalid credentials")
+    with session as open_session:
+        receiver_wallet = get_wallet_details(open_session, user_id=user_id)
+        await add_to_balance(receiver_wallet, body.amount)
+        return JSONResponse(content={}, status_code=200)
 
 
 # pylint: disable=too-many-arguments

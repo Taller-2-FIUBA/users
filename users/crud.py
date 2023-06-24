@@ -1,10 +1,12 @@
 """Handles CRUD database operations."""
 import math
 import logging
+from datetime import datetime
 from typing import List
 
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
-from users.models import Users, FollowedUsers, UsersWallets
+from users.models import Users, FollowedUsers, UsersWallets, Transactions
 from users.schemas import UserUpdate, UserBase
 
 BANNED_FIELDS_FOR_UPDATE = ["coordinates"]
@@ -51,6 +53,40 @@ def get_user_by_username(session: Session, username: str):
         "email": user.email,
         "location": user.location
     }
+
+
+def add_transaction(session: Session, sender: str,
+                    receiver: str, amount: float):
+    """Store transactions details."""
+    date = datetime.now()
+    new_transaction = Transactions(sender=sender,
+                                   receiver=receiver,
+                                   amount=amount,
+                                   date=date)
+    session.add(new_transaction)
+    session.commit()
+    session.refresh(new_transaction)
+
+
+def get_all_transactions(session: Session, address: str,
+                         minimum: float, limit: int, offset: int):
+    """Return details from a user identified by a certain username."""
+    if address:
+        transactions = session.query(Transactions). \
+            filter(or_(Transactions.sender == address,
+                       Transactions.receiver == address
+                       )
+                   ).filter(Transactions.amount >= minimum)
+    else:
+        transactions = session.query(Transactions) \
+            .filter(Transactions.amount >= minimum)
+    items = transactions.limit(limit).offset(offset).all()
+    size = len(items)
+    total = transactions.count()
+    pages = math.ceil(total / limit)
+    page = 1 + math.ceil(offset / limit)
+    return {"items": items, "total": total,
+            "page": page, "size": size, "pages": pages}
 
 
 def get_user_by_email(session: Session, email: str):
