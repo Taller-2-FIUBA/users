@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from tests.testing_constants import (
+from tests.testing_util import (
     user_1,
     user_2,
     user_3,
@@ -16,7 +16,7 @@ from tests.testing_constants import (
     user_template_no_email,
     private_keys,
     test_wallet,
-    user_to_update_location,
+    user_to_update_location, equal_dicts,
 )
 from users.main import DOCUMENTATION_URI, app, get_db
 from users.models import Base
@@ -58,12 +58,6 @@ def test_database_empty_at_start(test_db):
     response = client.get("users")
     assert response.status_code == 200
     assert response.json()["items"] == []
-
-
-def equal_dicts(dict1, dict2, ignore_keys):
-    d1_filtered = {k: v for k, v in dict1.items() if k not in ignore_keys}
-    d2_filtered = {k: v for k, v in dict2.items() if k not in ignore_keys}
-    return d1_filtered == d2_filtered
 
 
 @patch('users.main.create_wallet')

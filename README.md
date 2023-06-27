@@ -1,6 +1,9 @@
 # users
 
-Service to interact with users.
+[![codecov](https://codecov.io/gh/Taller-2-FIUBA/users/branch/main/graph/badge.svg?token=N1TV03GM47)](https://codecov.io/gh/Taller-2-FIUBA/users)
+
+
+Service to interact with users. Requires authentication and payment services to function correctly.
 
 ## Virtual environment
 
