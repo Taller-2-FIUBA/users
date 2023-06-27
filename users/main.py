@@ -4,7 +4,6 @@ import logging
 import os
 import time
 from typing import List, Optional
-import sentry_sdk
 import httpx
 
 from fastapi import FastAPI, HTTPException, Depends, Request, status
@@ -14,9 +13,10 @@ from fastapi.applications import get_swagger_ui_html
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 from environ import to_config
-from prometheus_client import start_http_server
-
-import users.metrics as m
+from newrelic.agent import (
+    record_custom_metric as record_metric,
+    register_application,
+)
 from users.config import AppConfig
 from users.database import get_database_url
 from users.crud import (
@@ -62,9 +62,6 @@ START = time.time()
 MONGO_URL = get_mongo_url(CONFIGURATION)
 
 
-if CONFIGURATION.sentry.enabled:
-    sentry_sdk.init(dsn=CONFIGURATION.sentry.dsn, traces_sample_rate=0.5)
-
 logging.basicConfig(encoding="utf-8", level=CONFIGURATION.log_level.upper())
 app = FastAPI(
     debug=CONFIGURATION.log_level.upper() == "DEBUG",
@@ -96,8 +93,8 @@ app.add_middleware(
     allow_headers=['*']
 )
 
-# Metrics
-start_http_server(CONFIGURATION.prometheus_port)
+NR_APP = register_application()
+COUNTER = {"count": 1}
 
 # Database initialization.
 # Maybe move this, so it is only run when required? Now it runs when ever
@@ -120,7 +117,7 @@ def get_db() -> Session:
 @app.post("/users/login")
 async def login(request: Request, session: Session = Depends(get_db)):
     """Log in to Firebase with email, password. Return token if successful."""
-    m.REQUEST_COUNTER.labels("/users/login", "post").inc()
+    record_metric('Custom/users-login/post', COUNTER, NR_APP)
     logging.info("Log-in user %s...")
     body = await token_login_firebase(request, "user", session)
     return JSONResponse(content=body, status_code=200)
@@ -146,7 +143,7 @@ def validate_user(session: Session, user: UserBase):
 async def create(new_user: UserCreate, session: Session = Depends(get_db)):
     """Create new user in Firebase, add it to the database if successful."""
     logging.info("Creating user %s...", new_user)
-    m.REQUEST_COUNTER.labels("/users", "post").inc()
+    record_metric('Custom/users/post', COUNTER, NR_APP)
     if new_user.email is None or new_user.password is None:
         msg = {'message': 'Error! Missing Email or Password'}
         logging.warning(
@@ -195,7 +192,7 @@ async def create_idp_user(request: Request,
                           user: UserBase, session: Session = Depends(get_db)):
     """Create new user with federated identity in database."""
     logging.info("Creating user with IDP token...")
-    m.REQUEST_COUNTER.labels("/users/usersIDP", "post").inc()
+    record_metric('Custom/users-usersIDP/post', COUNTER, NR_APP)
     if user.email is None:
         msg = {'message': 'Error! Missing Email'}
         raise HTTPException(detail=msg, status_code=400)
@@ -218,7 +215,7 @@ async def create_idp_user(request: Request,
 async def login_idp(request: Request, session: Session = Depends(get_db)):
     """Verify user is logged in through IDP and return token."""
     logging.info("Log-in user with IDP token...")
-    m.REQUEST_COUNTER.labels("/users/login/usersIDP", "post").inc()
+    record_metric('Custom/users-login-usersIDP/post', COUNTER, NR_APP)
     await validate_idp_token(request)
     request = await request.json()
     with session as open_session:
@@ -241,6 +238,7 @@ async def get_transactions(
     session: Session = Depends(get_db)
 ):
     """Get all transactions."""
+    record_metric('Custom/users-transactions/get', COUNTER, NR_APP)
     token = await get_credentials(request)
     if token["role"] != "admin":
         logging.warning("Invalid credentials for requesting all transactions")
@@ -262,7 +260,7 @@ async def get_one(
 ):
     """Retrieve details for users with specified id."""
     logging.info("Retrieving user %d details...", _id)
-    m.REQUEST_COUNTER.labels("/users/{_id}", "get").inc()
+    record_metric('Custom/users-id/get', COUNTER, NR_APP)
     token = await get_credentials(request)
     if not token["role"] == "admin" and not token["role"] == "user":
         logging.warning("Invalid role %s", token["role"])
@@ -282,7 +280,7 @@ async def get_user_wallet(
 ):
     """Retrieve wallet for users with specified id."""
     logging.info("Getting wallet belonging to user %d ...", user_id)
-    m.REQUEST_COUNTER.labels("/users/{user_id}/wallet/", "get").inc()
+    record_metric('Custom/users-id-wallet/get', COUNTER, NR_APP)
     token = await get_credentials(request)
     if token["role"] != "user" or token["id"] != user_id:
         logging.warning("Invalid wallet access for user %d", user_id)
@@ -307,7 +305,7 @@ async def get_wallet_balance(
 ):
     """Retrieve wallet balance for user with specified id."""
     logging.info("Getting wallet balance belonging to user %d ...", user_id)
-    m.REQUEST_COUNTER.labels("/users/{user_id}/wallet/balance", "get").inc()
+    record_metric('Custom/users-id-wallet-balance/get', COUNTER, NR_APP)
     token = await get_credentials(request)
     if token["id"] != user_id and token["role"] == "user":
         logging.warning("Invalid wallet access for user %d", user_id)
@@ -330,6 +328,7 @@ async def make_payment(
     session: Session = Depends(get_db)
 ):
     """Transfer specified money amount between specified users."""
+    record_metric('Custom/users-deposit/post', COUNTER, NR_APP)
     req = await request.json()
     receiver_id = req["receiver_id"]
     sender_id = req["sender_id"]
@@ -353,6 +352,7 @@ async def make_outside_payment(
     session: Session = Depends(get_db)
 ):
     """Transfer specified money amount to an outside account."""
+    record_metric('Custom/users-extraction/post', COUNTER, NR_APP)
     req = await request.json()
     receiver_address = req["receiver_address"]
     sender_id = req["sender_id"]
@@ -378,7 +378,7 @@ async def change_status(request: Request,
     Only admins allowed, can't block other admins
     """
     logging.info("Changing user %d status...", _id)
-    m.REQUEST_COUNTER.labels("/users/status/{_id}", "patch").inc()
+    record_metric('Custom/users-status-id/patch', COUNTER, NR_APP)
     token = await get_credentials(request)
     if not token["role"] == "admin":
         logging.warning("Invalid role %s", token["role"])
@@ -398,7 +398,7 @@ async def patch_user(
     session: Session = Depends(get_db)
 ):
     """Update user data."""
-    m.REQUEST_COUNTER.labels("/users/{_id}", "patch").inc()
+    record_metric('Custom/users-id/patch', COUNTER, NR_APP)
     logging.info("Updating user %d status...", _id)
     token = await get_credentials(request)
     if token["role"] == "user" and token["id"] != _id:
@@ -431,7 +431,7 @@ async def add_balance(
 ):
     """Add balance to a user wallet."""
     logging.info("Creating admin...")
-    m.REQUEST_COUNTER.labels("/users/{user_id}/wallet/balance", "patch").inc()
+    record_metric('Custom/users-id-wallet-balance/patch', COUNTER, NR_APP)
     token = await get_credentials(request)
     if token["role"] != "admin":
         logging.warning("Invalid credentials for balance modification")
@@ -459,7 +459,7 @@ async def get_all(
         "longitude='%s' radius='%s' offset='%s' limit='%s'",
         username, latitude, longitude, radius, offset, limit
     )
-    m.REQUEST_COUNTER.labels("/users", "get").inc()
+    record_metric('Custom/users/get', COUNTER, NR_APP)
     coordinates = get_coordinates(longitude, latitude)
     if username and coordinates:
         raise HTTPException(
@@ -494,7 +494,7 @@ async def get_all(
 async def password_recovery(username: str, session: Session = Depends(get_db)):
     """Request auth service to start password recovery for user_id."""
     logging.info("Recovering password for user %s...", username)
-    m.REQUEST_COUNTER.labels("/users/recovery/{username}", "post").inc()
+    record_metric('Custom/users-recover-username/post', COUNTER, NR_APP)
     with session as open_session:
         db_user = get_user_by_username(session=open_session, username=username)
         if db_user is None:
@@ -517,7 +517,7 @@ async def get_followed_users(
 ):
     """Retrieve all users followed by user with specified id."""
     logging.info("Getting followed users for user %s...", user_id)
-    m.REQUEST_COUNTER.labels("//users/{user_id}/followed", "get").inc()
+    record_metric('Custom/users-id-followed/get', COUNTER, NR_APP)
     with session as open_session:
         db_user = get_user_by_id(open_session, user_id=user_id)
         if db_user is None:
@@ -532,7 +532,7 @@ async def get_user_followers(
 ):
     """Retrieve all users followed by user with specified id."""
     logging.info("Getting followers for user %s...", user_id)
-    m.REQUEST_COUNTER.labels("//users/{user_id}/followers", "get").inc()
+    record_metric('Custom/users-id-followers/get', COUNTER, NR_APP)
     with session as open_session:
         db_user = get_user_by_id(open_session, user_id=user_id)
         if db_user is None:
@@ -548,6 +548,7 @@ async def stop_following_user(
     session: Session = Depends(get_db)
 ):
     """Retrieve all users followed by user with specified id."""
+    record_metric('Custom/users-id-followed-id/delete', COUNTER, NR_APP)
     with session as open_session:
         db_user = get_user_by_id(open_session, user_id=user_id)
         if db_user is None:
@@ -566,6 +567,7 @@ async def follow_user(
     session: Session = Depends(get_db)
 ):
     """Retrieve all users followed by user with specified id."""
+    record_metric('Custom/users-id-followed-id/post', COUNTER, NR_APP)
     with session as open_session:
         db_user = get_user_by_id(open_session, user_id=user_id)
     if db_user is None:
@@ -587,7 +589,7 @@ async def add_admin(
 ):
     """Create an admin."""
     logging.info("Creating admin...")
-    m.REQUEST_COUNTER.labels("/admins", "post").inc()
+    record_metric('Custom/admins/post', COUNTER, NR_APP)
     if new_admin.email is None:
         msg = {'message': 'Error! Missing Email.'}
         raise HTTPException(detail=msg, status_code=400)
@@ -603,7 +605,7 @@ async def add_admin(
 async def get_admins(request: Request, session: Session = Depends(get_db)):
     """Return all administrators."""
     logging.info("Retrieving admins...")
-    m.REQUEST_COUNTER.labels("/admins", "get").inc()
+    record_metric('Custom/admins/get', COUNTER, NR_APP)
     token = await get_credentials(request)
     if token["role"] != "admin":
         logging.warning("Invalid role %s", token["role"])
@@ -616,7 +618,7 @@ async def get_admins(request: Request, session: Session = Depends(get_db)):
 async def admin_login(request: Request, session: Session = Depends(get_db)):
     """Login as administrator. Return token if successful."""
     logging.info("Login admins...")
-    m.REQUEST_COUNTER.labels("/admins/login", "post").inc()
+    record_metric('Custom/admins-login/post', COUNTER, NR_APP)
     body = await token_login_firebase(request, "admin", session)
     return JSONResponse(content=body, status_code=200)
 
@@ -642,6 +644,6 @@ async def custom_swagger_ui_html(req: Request):
 async def get_locations() -> List[Location]:
     """Return CABA locations. Coordinates format (longitude, latitude)."""
     logging.info("Returning locations...")
-    m.REQUEST_COUNTER.labels(BASE_URI + "/locations/", "post").inc()
+    record_metric('Custom/users-locations/get', COUNTER, NR_APP)
     with open("static/location.json", encoding="UTF-8") as location_file:
         return json.load(location_file)
