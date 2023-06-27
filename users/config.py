@@ -43,15 +43,7 @@ class AppConfig:
 
         host = var("localhost:8020")
 
-    @config(prefix="SENTRY")
-    class Sentry:
-        """Sentry configuration."""
-
-        enabled = bool_var(False)
-        dsn = var("https://token@sentry.ingest.localhost")
-
     db = group(DB)  # type: ignore
     mongo = group(Mongo)
     payments = group(PAYMENTS)  # type: ignore
     auth = group(AUTH)  # type: ignore
-    sentry = group(Sentry)

@@ -7,5 +7,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 WORKDIR .
 
-CMD ["uvicorn", "users.main:app", "--host", "0.0.0.0", "--port", "8000"]
-
+ENTRYPOINT [\
+    "newrelic-admin",\
+    "run-program",\
+    "uvicorn",\
+    "users.main:app",\
+    "--host=0.0.0.0",\
+    "--port=8000"\
+]

@@ -1,5 +1,4 @@
 fastapi[all]
-prometheus-client
 environ-config
 pydantic
 uvicorn
@@ -7,5 +6,5 @@ sqlalchemy
 psycopg2-binary
 fastapi-pagination
 httpx
-sentry-sdk[fastapi]
 pymongo[srv]
+newrelic
