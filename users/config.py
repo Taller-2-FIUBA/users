@@ -50,7 +50,6 @@ class AppConfig:
         host = var("localhost")
         port = var(6379, converter=int)
 
-
     db = group(DB)  # type: ignore
     mongo = group(Mongo)
     payments = group(PAYMENTS)  # type: ignore

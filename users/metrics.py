@@ -8,7 +8,7 @@ from users.config import AppConfig
 
 
 def get_redis_connection(config: AppConfig) -> Redis:
-    """Create a redis connection"""
+    """Create a redis connection."""
     logging.info("Connecting to Redis...")
     pool = BlockingConnectionPool(
         host=config.redis.host,
