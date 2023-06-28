@@ -131,6 +131,20 @@ def change_blocked_status(session: Session, user_id: int):
     session.commit()
 
 
+def is_athlete(session: Session, user_id: int):
+    """Return true if user_id belongs to a trainer."""
+    db_user = session.query(Users).filter(Users.id == user_id).first()
+    return db_user.is_athlete
+
+
+def delete_user(session: Session, user_id: int):
+    """Delete goal with specified goal ID."""
+    session.query(UsersWallets).\
+        filter(UsersWallets.user_id == user_id).delete()
+    session.query(Users).filter(Users.id == user_id).delete()
+    session.commit()
+
+
 def update_user(session: Session, _id: int, user: UserUpdate):
     """Update an existing user."""
     columns_to_update = {

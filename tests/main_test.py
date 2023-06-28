@@ -212,6 +212,28 @@ def test_can_retrieve_user_with_his_username(add_mock, create_wallet,
     assert equal_dicts(get_response.json(), user_2, private_keys)
 
 
+# pylint: disable=too-many-arguments
+@patch('users.main.create_wallet')
+@patch('users.main.token_login_firebase')
+@patch('users.main.get_credentials')
+@patch('users.main.add_user_firebase')
+@patch('users.main.save_location')
+def test_cant_login_as_blocked_user(save_mock, add_mock, creds_mock,
+                                    firebase_mock, create_wallet, test_db):
+    add_mock.return_value = None
+    save_mock.return_value = None
+    firebase_mock.return_value = None
+    create_wallet.return_value = test_wallet
+    create_response = client.post("users", json=user_2)
+    url = "users/status/" + str(create_response.json()["id"])
+    creds_mock.return_value = {"id": 1,
+                               "role": "admin"}
+    client.patch(url)
+    request = {"email": user_2["email"], "password": user_2["password"]}
+    login_response = client.post("users/login", json=request)
+    assert login_response.status_code == 401
+
+
 @patch('users.main.create_wallet')
 @patch('users.main.add_user_firebase')
 @patch('users.main.save_location', MagicMock)
@@ -538,8 +560,8 @@ def test_pagination_with_ten_users_and_three_pages(add_mock,
 def test_when_getting_users_by_username_and_location_expect_error():
     response = client.get("users?username=banana&longitude=-1&latitude=-1")
     assert response.status_code == 406
-    assert response.json() ==\
-        {'detail': "Can't search by username and location. Use only one."}
+    assert response.json() == \
+           {'detail': "Can't search by username and location. Use only one."}
 
 
 @patch("users.main.get_users_within")

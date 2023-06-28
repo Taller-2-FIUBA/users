@@ -136,6 +136,35 @@ def test_can_transfer_money_between_users_with_proper_user_token(
 
 
 @patch('users.main.get_credentials')
+@patch('users.main.deposit_money')
+@patch('users.main.create_wallet')
+@patch('users.main.add_user_firebase')
+@patch('users.main.save_location')
+def test_cant_transfer_money_between_athletes(
+        save_mock,
+        add_mock,
+        create_wallet_mock,
+        deposit_mock,
+        get_creds_mock,
+        test_db):
+    deposit_mock.return_value = None
+    add_mock.return_value = None
+    save_mock.return_value = None
+    create_wallet_mock.return_value = test_wallet_1
+    client.post("users", json=user_1)
+    create_wallet_mock.return_value = test_wallet_2
+    client.post("users", json=user_2)
+    get_creds_mock.return_value = {"id": 1, "role": "user"}
+    body = {
+        "receiver_id": 1,
+        "sender_id": 2,
+        "amount": 0.01,
+    }
+    response = client.post("users/deposit", json=body)
+    assert response.status_code == 403
+
+
+@patch('users.main.get_credentials')
 @patch('users.main.create_wallet')
 @patch('users.main.add_user_firebase')
 @patch('users.main.save_location')

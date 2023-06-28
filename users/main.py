@@ -31,7 +31,8 @@ from users.crud import (
     get_users_followed_by,
     unfollow_user,
     follow_new_user, get_wallet_details,
-    get_followers, add_transaction, get_all_transactions, user_is_blocked
+    get_followers, add_transaction, get_all_transactions,
+    user_is_blocked, is_athlete, delete_user
 )
 from users.metrics import queue
 from users.mongodb import (
@@ -61,7 +62,6 @@ CONFIGURATION = to_config(AppConfig)
 DOCUMENTATION_URI = BASE_URI + "/documentation/"
 START = time.time()
 MONGO_URL = get_mongo_url(CONFIGURATION)
-
 
 logging.basicConfig(encoding="utf-8", level=CONFIGURATION.log_level.upper())
 app = FastAPI(
@@ -102,7 +102,7 @@ COUNTER = {"count": 1}
 # the application is started, and we may not need to create the database
 # structure.
 ENGINE = create_engine(get_database_url(CONFIGURATION),
-                       pool_pre_ping=True,)
+                       pool_pre_ping=True, )
 if "TESTING" not in os.environ:
     logging.info("Building database...")
     Base.metadata.create_all(bind=ENGINE)
@@ -166,13 +166,18 @@ async def create(new_user: UserCreate, session: Session = Depends(get_db)):
         logging.info("Uploading user image...")
         await upload_image(new_user.image, new_user.username)
     db_user = create_user(session=session, user=new_user, wallet=wallet)
-    save_location(
-        MONGO_URL,
-        db_user.is_athlete,
-        db_user.id,
-        new_user.coordinates,
-        CONFIGURATION
-    )
+    try:
+        save_location(
+            MONGO_URL,
+            db_user.is_athlete,
+            db_user.id,
+            new_user.coordinates,
+            CONFIGURATION
+        )
+    except Exception as exc:
+        delete_user(session, db_user.id)
+        raise HTTPException(detail="MongoDB error when saving location",
+                            status_code=500) from exc
     queue(CONFIGURATION, "user_created_count", "using_email_password")
     if new_user.location:
         queue(CONFIGURATION, "user_by_region_count", new_user.location)
@@ -211,13 +216,18 @@ async def create_idp_user(request: Request,
     wallet = await create_wallet()
     logging.debug("Creating IDP user in DB...")
     db_user = create_user(session=session, user=user, wallet=wallet)
-    save_location(
-        MONGO_URL,
-        db_user.is_athlete,
-        db_user.id,
-        user.coordinates,
-        CONFIGURATION
-    )
+    try:
+        save_location(
+            MONGO_URL,
+            db_user.is_athlete,
+            db_user.id,
+            user.coordinates,
+            CONFIGURATION
+        )
+    except Exception as exc:
+        delete_user(session, db_user.id)
+        raise HTTPException(detail="MongoDB error when saving location",
+                            status_code=500) from exc
     queue(CONFIGURATION, "user_created_count", "using_idp")
     return db_user
 
@@ -349,6 +359,10 @@ async def make_payment(
     if token["id"] != sender_id or token["role"] != "user":
         logging.warning("Invalid wallet access for user %d", sender_id)
         raise HTTPException(status_code=403, detail="Invalid credentials")
+    if not is_athlete(session, sender_id) or is_athlete(session,
+                                                        receiver_id):
+        logging.warning("Invalid transfer from user %d", sender_id)
+        raise HTTPException(status_code=403, detail="Invalid transfer")
     with session as open_session:
         sender_wallet = get_wallet_details(open_session, user_id=sender_id)
         receiver_wallet = get_wallet_details(open_session, user_id=receiver_id)
