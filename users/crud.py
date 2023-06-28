@@ -144,6 +144,12 @@ def update_user(session: Session, _id: int, user: UserUpdate):
     session.commit()
 
 
+def user_is_blocked(session, email):
+    """Return true if user is blocked."""
+    user = get_user_by_email(session, email)
+    return user.is_blocked
+
+
 def get_details_with_id(session: Session, user_id: int):
     """Inverts blocked status for user with provided id."""
     user = session.query(Users).filter(Users.id == user_id).first()
@@ -173,7 +179,7 @@ def follow_new_user(session: Session, user_id: int, _id: int):
     """Add new followed user to specified user."""
     if session.query(FollowedUsers).filter(FollowedUsers.id == user_id,
                                            FollowedUsers.followed_id == _id) \
-            .first() is not None:
+        .first() is not None:
         return get_users_followed_by(session, user_id)
     new_follow = FollowedUsers(id=user_id, followed_id=_id)
     session.add(new_follow)

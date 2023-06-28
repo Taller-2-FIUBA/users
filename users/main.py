@@ -31,7 +31,7 @@ from users.crud import (
     get_users_followed_by,
     unfollow_user,
     follow_new_user, get_wallet_details,
-    get_followers, add_transaction, get_all_transactions
+    get_followers, add_transaction, get_all_transactions, user_is_blocked
 )
 from users.mongodb import (
     get_mongo_url,
@@ -100,7 +100,8 @@ COUNTER = {"count": 1}
 # Maybe move this, so it is only run when required? Now it runs when ever
 # the application is started, and we may not need to create the database
 # structure.
-ENGINE = create_engine(get_database_url(CONFIGURATION))
+ENGINE = create_engine(get_database_url(CONFIGURATION),
+                       pool_pre_ping=True,)
 if "TESTING" not in os.environ:
     logging.info("Building database...")
     Base.metadata.create_all(bind=ENGINE)
@@ -119,7 +120,11 @@ async def login(request: Request, session: Session = Depends(get_db)):
     """Log in to Firebase with email, password. Return token if successful."""
     record_metric('Custom/users-login/post', COUNTER, NR_APP)
     logging.info("Log-in user %s...")
+    req = await request.json()
+    email = req["email"]
     body = await token_login_firebase(request, "user", session)
+    if user_is_blocked(session, email):
+        raise HTTPException(status_code=401, detail="User is blocked")
     return JSONResponse(content=body, status_code=200)
 
 
