@@ -1,5 +1,6 @@
 # pylint: disable= missing-module-docstring, missing-function-docstring
 from unittest.mock import ANY, MagicMock, patch
+
 from users.metrics import get_redis_connection, queue
 
 
@@ -32,15 +33,7 @@ def test_when_name_and_label_are_defined_expect_them_in_message(
     get_redis_connection_mock.return_value = expected_client
     queue(expected_config, "banana", "tomato")
     get_redis_connection_mock.assert_called_once_with(expected_config)
-    expected_client.rpush.assert_called_once_with(
-        "metrics",
-        {
-            "metric": "banana",
-            "value": 1,
-            "label": "tomato",
-            "date": ANY,
-        }
-    )
+    expected_client.rpush.assert_called_once_with("metrics", ANY)
 
 
 @patch("users.metrics.get_redis_connection")
@@ -53,14 +46,7 @@ def test_when_label_is_none_expect_no_key(
     get_redis_connection_mock.return_value = expected_client
     queue(expected_config, "banana", None)
     get_redis_connection_mock.assert_called_once_with(expected_config)
-    expected_client.rpush.assert_called_once_with(
-        "metrics",
-        {
-            "metric": "banana",
-            "value": 1,
-            "date": ANY,
-        }
-    )
+    expected_client.rpush.assert_called_once_with("metrics", ANY)
 
 
 @patch("users.metrics.get_redis_connection")

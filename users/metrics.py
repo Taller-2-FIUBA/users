@@ -19,6 +19,7 @@ def get_redis_connection(config: AppConfig) -> Redis:
     return Redis(connection_pool=pool)
 
 
+# pylint: disable=broad-exception-caught
 def queue(config: AppConfig, name: str, label: Optional[str] = None) -> None:
     """Queue a metric with name and label."""
     message = {
@@ -31,6 +32,6 @@ def queue(config: AppConfig, name: str, label: Optional[str] = None) -> None:
     try:
         client = get_redis_connection(config)
         logging.exception("Queuing message %s", message)
-        client.rpush("metrics", message)
+        client.rpush("metrics", str(message))
     except Exception:
         logging.exception("Error when trying to save metrics.")
