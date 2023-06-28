@@ -18,6 +18,7 @@ data:
   USERS_MONGO_HOST: fiufit.rqnbyme.mongodb.net
   USERS_MONGO_DRIVER: mongodb+srv
   USERS_MONGO_PASSWORD: $USERS_MONGO_PASSWORD
+  USERS_REDIS_HOST: "redis-master.taller2-marianocinalli.svc.cluster.local"
   NEW_RELIC_LICENSE_KEY: $USERS_NEW_RELIC_KEY
   NEW_RELIC_APP_NAME: users
   NEW_RELIC_MONITOR_MODE: "true"

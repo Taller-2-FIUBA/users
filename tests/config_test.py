@@ -153,3 +153,27 @@ def test_when_environment_mongo_database_expect_fiufit():
 def test_when_environment_mongo_database_expect_locations():
     cnf = to_config(AppConfig)
     assert cnf.mongo.database == "locations"
+
+
+@patch.dict(environ, {}, clear=True)
+def test_when_environment_is_empty_expect_redis_host_localhost():
+    cnf = to_config(AppConfig)
+    assert cnf.redis.host == "localhost"
+
+
+@patch.dict(environ, {"USERS_REDIS_HOST": "banana"}, clear=True)
+def test_when_environment_redis_host_is_banana_expect_banana():
+    cnf = to_config(AppConfig)
+    assert cnf.redis.host == "banana"
+
+
+@patch.dict(environ, {}, clear=True)
+def test_when_environment_is_empty_expect_redis_port_6379():
+    cnf = to_config(AppConfig)
+    assert cnf.redis.port == 6379
+
+
+@patch.dict(environ, {"USERS_REDIS_PORT": "6677"}, clear=True)
+def test_when_environment_redis_port_is_6677_expect_6677():
+    cnf = to_config(AppConfig)
+    assert cnf.redis.port == 6677

@@ -43,7 +43,16 @@ class AppConfig:
 
         host = var("localhost:8020")
 
+    @config(prefix="REDIS")
+    class Redis:
+        """Redis configuration."""
+
+        host = var("localhost")
+        port = var(6379, converter=int)
+
+
     db = group(DB)  # type: ignore
     mongo = group(Mongo)
     payments = group(PAYMENTS)  # type: ignore
     auth = group(AUTH)  # type: ignore
+    redis = group(Redis)  # type: ignore
