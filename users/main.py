@@ -397,9 +397,9 @@ async def change_status(request: Request,
         raise HTTPException(status_code=403, detail="Invalid credentials")
     with session as open_session:
         db_user = get_user_by_id(open_session, user_id=_id)
-        change_blocked_status(open_session, _id)
         if not db_user.is_blocked:
             queue(CONFIGURATION, "user_blocked_count", None)
+        change_blocked_status(open_session, _id)
     if db_user is None:
         raise HTTPException(status_code=404, detail="User not found")
 
