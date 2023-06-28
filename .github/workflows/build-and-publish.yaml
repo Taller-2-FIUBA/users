@@ -31,29 +31,3 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-
-  okteto_deployment:
-    runs-on: ubuntu-latest
-    needs: push_to_registry
-    steps:
-    - name: checkout
-      uses: actions/checkout@master
-      with:
-        ref: main
-
-    - name: Okteto context
-      uses: okteto/context@latest
-      with:
-        token: ${{ secrets.OKTETO_TOKEN }}
-
-    - name: Activate Namespace
-      uses: okteto/namespace@latest
-      with:
-        namespace: taller2-marianocinalli
-
-    - name: Trigger the pipeline
-      uses: okteto/pipeline@latest
-      with:
-        name: users
-        timeout: 8m
-        variables: "NAMESPACE=taller2-marianocinalli"
