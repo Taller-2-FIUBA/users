@@ -33,6 +33,7 @@ from users.crud import (
     follow_new_user, get_wallet_details,
     get_followers, add_transaction, get_all_transactions, user_is_blocked
 )
+from users.metrics import queue
 from users.mongodb import (
     get_mongo_url,
     get_mongodb_connection,
@@ -125,6 +126,7 @@ async def login(request: Request, session: Session = Depends(get_db)):
     body = await token_login_firebase(request, "user", session)
     if user_is_blocked(session, email):
         raise HTTPException(status_code=401, detail="User is blocked")
+    queue(CONFIGURATION, "user_login_count", "using_email_password")
     return JSONResponse(content=body, status_code=200)
 
 
@@ -171,6 +173,9 @@ async def create(new_user: UserCreate, session: Session = Depends(get_db)):
         new_user.coordinates,
         CONFIGURATION
     )
+    queue(CONFIGURATION, "user_created_count", "using_email_password")
+    if new_user.location:
+        queue(CONFIGURATION, "user_by_region_count", new_user.location)
     return db_user
 
 
@@ -213,6 +218,7 @@ async def create_idp_user(request: Request,
         user.coordinates,
         CONFIGURATION
     )
+    queue(CONFIGURATION, "user_created_count", "using_idp")
     return db_user
 
 
@@ -229,6 +235,7 @@ async def login_idp(request: Request, session: Session = Depends(get_db)):
             msg = {'message': 'No IDP user with such an email'}
             logging.warning("Could not login with IDP token: %s", msg)
             raise HTTPException(detail=msg, status_code=404)
+    queue(CONFIGURATION, "user_login_count", "using_idp")
     return {"token": await get_token("user", user.id), "id": user.id}
 
 
@@ -391,6 +398,8 @@ async def change_status(request: Request,
     with session as open_session:
         db_user = get_user_by_id(open_session, user_id=_id)
         change_blocked_status(open_session, _id)
+        if not db_user.is_blocked:
+            queue(CONFIGURATION, "user_blocked_count", None)
     if db_user is None:
         raise HTTPException(status_code=404, detail="User not found")
 
@@ -512,6 +521,7 @@ async def password_recovery(username: str, session: Session = Depends(get_db)):
         error = res.json()["Message"]
         logging.error("Error when recovering password: %s", error)
         raise HTTPException(status_code=res.status_code, detail=error)
+    queue(CONFIGURATION, "user_password_recovery_count", None)
     return JSONResponse(content={}, status_code=200)
 
 
