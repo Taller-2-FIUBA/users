@@ -7,10 +7,10 @@ metadata:
     app: fiufit
     tier: users-microservice
 data:
-  USERS_DB_DATABASE: "fiufit"
-  USERS_DB_USER: "backend"
+  USERS_DB_HOST: dpg-cikrbnlph6eg6ke1cgbg-a.oregon-postgres.render.com
+  USERS_DB_DATABASE: fiufit_4evp
+  USERS_DB_USER: "fiufit"
   USERS_DB_PASSWORD: $USERS_DB_PASSWORD
-  USERS_DB_HOST: "dpg-cgno8m8rddl9mmvdaja0-a.oregon-postgres.render.com"
   USERS_LOG_LEVEL: INFO
   USERS_AUTH_HOST: auth-service.taller2-marianocinalli.svc.cluster.local:8002
   USERS_TEST_IS_TESTING: "False"
